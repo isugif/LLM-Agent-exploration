@@ -21,13 +21,13 @@ class BoundaryCheck(BaseModel):
 
 
 class JudgmentAgent(Agent):
-    """You are a fit critic for FastQC, which ONLY produces quality-control reports (it never
-    trims, cleans, aggregates across samples, or identifies organisms). You reject requests that
-    would run but be biologically or methodologically wrong."""
+    """You are a fit critic for bioinformatics tools. You reject requests that would run but be
+    biologically or methodologically wrong, judging the named tool against its stated purpose."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, tool_id: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.contract = cl.load_contract("fastqc")
+        self.tool_id = tool_id
+        self.contract = cl.load_contract(tool_id)
 
     # --- deterministic tools ---
     def check_preconditions(self, declared: dict, measured: dict):
@@ -55,10 +55,16 @@ class JudgmentAgent(Agent):
 
     # --- agentic (LLM-driven) method ---
     @strategy(PredictStrategy())
-    async def confirm_boundary(self, boundary: str, deliverable: str) -> BoundaryCheck:
-        """Decide whether the user is asking FastQC ITSELF to perform the forbidden action in
-        `boundary`. Merely mentioning a separate, later, or downstream step is NOT a violation:
-        e.g. 'QC the reads before trimming' asks only for QC (allowed) — trimming is a different
-        step done by a different tool. Set violates=true only when FastQC itself is asked to do
-        the forbidden thing."""
+    async def confirm_boundary(self, tool_id: str, tool_summary: str,
+                               boundary: str, deliverable: str) -> BoundaryCheck:
+        """You are a fit critic for `tool_id` (purpose: `tool_summary`). Decide whether the user's
+        `deliverable` asks `tool_id` ITSELF to do the forbidden thing described in `boundary`.
+
+        Rules:
+        - If the deliverable asks for a result that `boundary` says this tool must not produce, that
+          IS a violation (violates=true) — even if the tool could emit related-looking numbers.
+        - Merely mentioning a separate, later, or downstream step is NOT a violation: e.g. 'QC the
+          reads before trimming' asks only for QC (allowed); trimming is a different tool's job.
+
+        Set violates=true only when `tool_id` itself is being asked to do the forbidden thing."""
         ...

@@ -4,13 +4,25 @@
   "title": "Component contract",
   "description": "A machine-readable contract for a bioinformatics component (tool/db/data type/workflow). Declares preconditions, operating range, and must-not-use boundaries so a fit-critic can reject a workflow that would RUN but be WRONG. This is the enforceable core the workbook prose ymls lack.",
   "type": "object",
-  "required": ["id", "kind", "version", "interface", "preconditions", "operating_range", "must_not_use", "failure_modes"],
+  "required": ["id", "kind", "version", "execution", "interface", "preconditions", "operating_range", "must_not_use", "failure_modes"],
   "additionalProperties": false,
   "properties": {
     "id": { "type": "string", "description": "Stable component id, e.g. 'fastqc'." },
     "kind": { "type": "string", "enum": ["tool", "database", "datatype", "workflow"] },
     "version": { "type": "string", "description": "Version this contract is scoped to. Contracts are version-scoped: a gotcha true for 0.12.x may be false for 0.11.x." },
     "summary": { "type": "string" },
+
+    "execution": {
+      "type": "object",
+      "description": "How the generic runner invokes the tool. `argv` is a token list (never a shell string) with placeholders {input}, {out_dir}, {threads} substituted per token — so there is no shell injection surface.",
+      "required": ["argv"],
+      "additionalProperties": false,
+      "properties": {
+        "argv": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "version_argv": { "type": "array", "items": { "type": "string" } },
+        "install_hint": { "type": "string" }
+      }
+    },
 
     "interface": {
       "type": "object",

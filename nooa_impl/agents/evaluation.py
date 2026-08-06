@@ -12,13 +12,8 @@ from nooa import Agent, strategy
 from nooa.strategies import PredictStrategy
 
 from shared import contracts_lib as cl
-from shared.qc.fastqc_parse import parse_fastqc
+from shared.tools.registry import get_parser
 from shared.models import Verdict
-
-SCORED = [
-    "per_base_mean_quality", "percent_gc", "percent_duplication",
-    "overrepresented_percent", "adapter_content_max_percent",
-]
 
 
 class Explanation(BaseModel):
@@ -26,21 +21,22 @@ class Explanation(BaseModel):
 
 
 class EvaluationAgent(Agent):
-    """You judge whether FastQC output is biologically reasonable by comparing metrics to expected
+    """You judge whether a tool's output is biologically reasonable by comparing metrics to expected
     ranges, and you note when a flag (e.g. RNA-seq duplication) may be biologically normal."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, tool_id: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.contract = cl.load_contract("fastqc")
+        self.tool_id = tool_id
+        self.contract = cl.load_contract(tool_id)
         self.expectations = cl.load_expectations(self.contract)
 
     # --- deterministic tools ---
     def parse(self, output_dir: str) -> dict:
-        return parse_fastqc(output_dir)
+        return get_parser(self.tool_id)(output_dir)
 
     def score(self, metrics: dict):
         scored, findings = {}, []
-        for name in SCORED:
+        for name in self.expectations.get("metrics", {}):   # scored metrics come from the contract
             if name in metrics:
                 s = cl.score_metric(self.expectations, name, metrics[name])
                 scored[name] = s

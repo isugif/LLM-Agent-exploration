@@ -28,22 +28,28 @@ Milestone 1 implements this end-to-end on **FastQC** (small + fast for iteration
 ## Layout
 
 ```
+bio-tools/         ONE folder per tool = its single source of truth
+  fastqc/          workbook ymls (install/hpc/usage/...) + contract.yml (the enforceable contract)
+  multiqc/         same layout — second tool, added with no harness changes
 shared/            framework-agnostic knowledge + execution (BOTH tracks import this)
-  contracts/       contract schema, the FastQC contract, the expected-range table
-  probes/          measured-facts probe for FASTQ
-  execution/       deterministic FastQC runner (+ audit record)
-  qc/              FastQC output parser
+  contracts/       schema/ + expectations/ (assay-keyed expected-range tables)
+  probes/          measured-facts probes (FASTQ; report-dir for aggregators)
+  execution/       generic contract-driven runner (+ audit record)
+  qc/              per-tool output parsers (fastqc, multiqc)
+  tools/registry.py  tool_id -> parser + input probe
   contracts_lib.py load/validate contracts, safe precondition eval, metric scoring
   llm/             pluggable Ollama provider (LangGraph track)
   data/            fetch_virus_fastq.sh — small SARS-CoV-2 test dataset
 langgraph_impl/    LangGraph track: StateGraph + node functions   (+ CHANGELOG.md)
 nooa_impl/         NOOA track: Agent classes + plain orchestrator  (+ CHANGELOG.md)
-docs/              ARCHITECTURE.md, COMPARISON.md
+tests/             fixtures per failure mode + run_tests.py -> REPORT.md
+docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md
 ```
 
-Guiding rule: knowledge about biology/tools lives in `shared/contracts/`; anything that *runs* a
-tool lives in `shared/execution/`; anything an agent *decides* lives in a harness/agent file named
-after the harness. Adding a tool = drop a contract yaml. Adding a check = add a metric row.
+Guiding rule: everything tool-specific lives in `bio-tools/<tool>/`; the harnesses are
+tool-agnostic. **Adding a tool = drop `bio-tools/<tool>/contract.yml` + register a parser** (see
+[`docs/ADD_A_TOOL.md`](docs/ADD_A_TOOL.md)). Adding a QC check = add a metric row to an expectation
+table. No harness/track code changes for either.
 
 ## Setup
 
@@ -78,8 +84,25 @@ python -m langgraph_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
     --deliverable "give me the overall cohort quality conclusion across all samples"
 ```
 
+A **second tool** (MultiQC) with the same CLI — point it at a directory of tool reports:
+
+```bash
+python -m langgraph_impl.run --tool multiqc --fastq <dir_of_fastqc_reports> \
+    --question "aggregate the FastQC reports for this run"
+```
+
 The LLM is only used for judgment-shaped steps; deterministic checks still run with Ollama off
 (the pipeline reports `llm_provider: null` and degrades gracefully).
+
+## Tests
+
+```bash
+python tests/run_tests.py          # deterministic (no LLM) — writes tests/REPORT.md, exits nonzero on failure
+python tests/run_tests.py --llm    # also runs the LLM-dependent boundary-refusal case
+```
+
+`tests/REPORT.md` is a committed markdown table of every case × both tracks (happy / refusal /
+precondition-block / anomaly / diagnosis / MultiQC). Fixtures are in `tests/inputs/`.
 
 ## Two changelogs
 

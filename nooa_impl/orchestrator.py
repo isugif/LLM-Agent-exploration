@@ -11,10 +11,10 @@ LLM-driven steps are skipped and the deterministic checks still run.
 
 from __future__ import annotations
 
-import os
 import tempfile
 
-from shared.execution.fastqc_runner import run_fastqc
+from shared import contracts_lib as cl
+from shared.execution.runner import run_tool
 from shared.models import RouteDecision, Verdict
 
 from nooa_impl.llm import build_llm
@@ -25,21 +25,22 @@ from nooa_impl.agents.evaluation import EvaluationAgent
 
 
 async def run_pipeline(fastq: str, question: str, deliverable: str | None = None,
-                       out_dir: str | None = None) -> dict:
+                       out_dir: str | None = None, tool_id: str = "fastqc") -> dict:
     deliverable = deliverable or question
     llm, have_llm, provider_name = build_llm()
 
     # All agents get the (lazily-constructed) llm so they build even when Ollama is down;
-    # `have_llm` gates whether we actually CALL the agentic methods.
+    # `have_llm` gates whether we actually CALL the agentic methods. Each judging agent loads the
+    # contract for `tool_id` — so the pipeline is tool-agnostic.
     onboard = OnboardingAgent(llm=llm)
-    judge = JudgmentAgent(llm=llm)
-    diagnose = DiagnosisAgent(llm=llm)
-    evaluate = EvaluationAgent(llm=llm)
+    judge = JudgmentAgent(tool_id, llm=llm)
+    diagnose = DiagnosisAgent(tool_id, llm=llm)
+    evaluate = EvaluationAgent(tool_id, llm=llm)
 
-    report: dict = {"track": "nooa", "llm_provider": provider_name}
+    report: dict = {"track": "nooa", "tool": tool_id, "llm_provider": provider_name}
 
     # --- 1. Onboarding -------------------------------------------------------
-    measured = onboard.probe_file(fastq)
+    measured = onboard.probe_file(fastq, tool_id)
     declared: dict = {}
     if have_llm:
         declared = (await onboard.parse_question(question)).model_dump()
@@ -49,9 +50,10 @@ async def run_pipeline(fastq: str, question: str, deliverable: str | None = None
     # --- 2. Judgment (fit critic) -------------------------------------------
     blocking, warnings = judge.check_preconditions(spec.declared, spec.measured)
     confirmed, boundary_notes = [], []
+    tool_summary = (judge.contract.get("summary") or "").strip()
     for b in judge.candidate_boundaries(deliverable):
         if have_llm:
-            res = await judge.confirm_boundary(b["boundary"], deliverable)
+            res = await judge.confirm_boundary(tool_id, tool_summary, b["boundary"], deliverable)
             boundary_notes.append(f"{b['id']}: {res.reason}")
             if res.violates:
                 confirmed.append(b["id"])
@@ -67,8 +69,8 @@ async def run_pipeline(fastq: str, question: str, deliverable: str | None = None
         return report
 
     # --- 3. Execution --------------------------------------------------------
-    out_dir = out_dir or tempfile.mkdtemp(prefix="fastqc_")
-    run_result = run_fastqc(fastq, out_dir)
+    out_dir = out_dir or tempfile.mkdtemp(prefix=f"{tool_id}_")
+    run_result = run_tool(cl.load_contract(tool_id), fastq, out_dir)
     report["run_result"] = {k: v for k, v in run_result.to_dict().items()
                             if k not in ("stdout", "stderr")}
 

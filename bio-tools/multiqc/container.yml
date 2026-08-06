@@ -1,0 +1,41 @@
+intro: "Use containerized MultiQC for portable and reproducible report generation."
+note: "[[CONTAINER_GENERAL_NOTE]]"
+warning: "[[SCRATCH_SPACE_NOTE]]"
+protip: |
+  - [[CONTAINER_TAG_PROTIP]]
+  - [[CONTAINER_PREFERENCE]]
+variants:
+  DOCKER: |
+    ```bash
+    # Pull and run MultiQC in Docker
+    docker pull quay.io/biocontainers/multiqc:1.15--pyhdfd78af_0
+    docker run --rm -v $(pwd):/data quay.io/biocontainers/multiqc:1.15--pyhdfd78af_0 \
+      multiqc /data/results -o /data/qc/multiqc -n project_multiqc_report.html -f
+    ```
+  APPTAINER: |
+    ```bash
+    # Pull and run MultiQC in Apptainer
+    apptainer pull docker://quay.io/biocontainers/multiqc:1.15--pyhdfd78af_0
+    apptainer exec multiqc_1.15--pyhdfd78af_0.sif \
+      multiqc /data/results -o /data/qc/multiqc -n project_multiqc_report.html -f
+    ```
+embeds:
+  CONTAINER_GENERAL_NOTE:
+    folder: notes
+    file: setup
+    items: container-use
+  SCRATCH_SPACE_NOTE:
+    folder: notes
+    file: setup
+    items: container-scratch-space
+  CONTAINER_TAG_PROTIP:
+    folder: notes
+    file: setup
+    items: container-image-tag
+  CONTAINER_PREFERENCE:
+    folder: notes
+    file: setup
+    items: container-preference
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

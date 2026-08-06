@@ -15,9 +15,9 @@ from shared.models import RunResult, Verdict
 class DiagnosisAgent(Agent):
     """You match a failed run's audit trail against known failure modes and propose the fix."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, tool_id: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.contract = cl.load_contract("fastqc")
+        self.contract = cl.load_contract(tool_id)
 
     def diagnose(self, run_result: RunResult) -> Verdict:
         haystack = "\n".join([run_result.stderr or "", run_result.stdout or "", run_result.error or ""])
@@ -29,9 +29,10 @@ class DiagnosisAgent(Agent):
                     proposed_fix=fm["fix"], escalate=False,
                 )
         if run_result.error and "not found on PATH" in run_result.error:
-            return Verdict(status="failure", findings=["fastqc is not installed"],
-                           proposed_fix="Install FastQC: `mamba install -c bioconda fastqc`.",
-                           escalate=False)
+            tool = self.contract["id"]
+            hint = self.contract.get("execution", {}).get("install_hint", "")
+            return Verdict(status="failure", findings=[f"{tool} is not installed"],
+                           proposed_fix=f"Install {tool}: `{hint}`.", escalate=False)
         return Verdict(
             status="failure",
             findings=[f"unrecognized failure (exit={run_result.exit_code}). stderr tail: "

@@ -1,0 +1,17 @@
+intro: "[MultiQC](/biotool#multiqc) aggregates outputs from many bioinformatics tools into one interactive quality-control report."
+insights: |
+  - one HTML report across many samples and tools
+  - standardized QC summary tables and plots for cohort-level review
+  - exportable parsed metrics for downstream tracking
+note: "[[FEATURES]]"
+warning: "Report quality depends on complete and correctly named upstream log/result files."
+protip: "Run MultiQC after all QC/alignment/quantification tools finish so the report includes the full sample set."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  FEATURES:
+    folder: bio-tools
+    file: index
+    items: multiqc.features
+extra: {}

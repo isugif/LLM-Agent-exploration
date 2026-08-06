@@ -1,0 +1,26 @@
+intro: "Use these notes to keep MultiQC aggregation accurate, reproducible, and performant across projects."
+note: ""
+warning:
+  title: "Old runs and scan scope"
+  note: |
+    - MultiQC may discover stale results when scanning shared roots; exclude irrelevant paths using ignore-path filters.
+    - Very large directory trees can slow discovery; point MultiQC to the smallest relevant analysis subtree when possible.
+protip:
+  title: "Operational tips"
+  note: |
+    - Standardize sample IDs before running upstream tools to avoid cross-module name mismatches.
+    - Archive `multiqc_report.html` together with `multiqc_data/` for reproducible QA snapshots.
+variants:
+  CONFIG_FILE:
+    title: "Project configuration"
+    note: "Use a project MultiQC configuration file to control columns, colors, sample renaming, module selection, and report behavior consistently across runs."
+  PIPELINE_HOOK:
+    title: "Workflow integration"
+    note: "Run MultiQC as a final dependent step after upstream jobs complete; use step-level MultiQC checkpoints only when deliberate progress snapshots are needed."
+  TOOL_PAIRING:
+    title: "Upstream tool pairing"
+    note: "Pair MultiQC with [FastQC](/biotool#fastqc#overview), [Trimmomatic](/biotool#trimmomatic#overview), [HISAT2](/biotool#hisat2#overview), [STAR](/biotool#star#overview), [featureCounts](/biotool#featurecounts#overview), and [Salmon](/biotool#salmon#overview) for broad RNA-seq QC coverage."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

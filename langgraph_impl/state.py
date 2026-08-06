@@ -12,7 +12,8 @@ from typing import Any, Optional, TypedDict
 
 class PipelineState(TypedDict, total=False):
     # inputs
-    fastq: str
+    tool: str                          # which tool's contract to route against (e.g. "fastqc")
+    fastq: str                         # input path (a FASTQ file, or a report dir for aggregators)
     question: str
     deliverable: str
     out_dir: str

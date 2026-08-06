@@ -6,6 +6,31 @@ so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.2.0] — 2026-08-06
+
+### Changed
+- **Pluggable tools.** De-hardcoded the agents: `run_pipeline(..., tool_id=...)` and `--tool` flag;
+  `JudgmentAgent`/`DiagnosisAgent`/`EvaluationAgent` take `tool_id` and load their contract from it.
+  Execution via the generic `run_tool`; evaluation via `get_parser(tool_id)` with scored metrics
+  derived from the contract's expectation table (removed `SCORED`). Onboarding probe selected per
+  tool via `get_probe`. `confirm_boundary` is now tool-parameterized (args, not a fixed docstring).
+- shared: contracts moved to `bio-tools/<tool>/contract.yml`; generic `shared/execution/runner.py`;
+  `shared/tools/registry.py`; `shared/probes/report_dir_probe.py`; schema `execution` block
+  (see the LangGraph changelog for the shared-layer detail).
+
+### Added
+- MultiQC as a second tool, wired in with **no agent/orchestrator changes**.
+- `tests/` suite + `tests/REPORT.md` (shared with the LangGraph track; runs both).
+
+### Fixed
+- Boundary-confirmation prompt: the docstring-as-prompt wording under-specified the decision rule, so
+  `qwen2.5vl:7b` let a cohort-level deliverable through where LangGraph refused it. Tightened the
+  docstring to state the rule as pointedly as the LangGraph prompt → NOOA now refuses consistently
+  (3/3), full `--llm` suite 16/16. See docs/COMPARISON.md §6.
+
+### Verified
+- FastQC + MultiQC happy paths at parity with the LangGraph track. Deterministic suite 14/0/1.
+
 ## [0.1.0] — 2026-08-06
 
 ### Added

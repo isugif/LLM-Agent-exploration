@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from shared.probes.fastq_probe import probe
+from shared.tools.registry import get_probe
 from shared.models import Spec
 from shared.llm.provider import get_provider, NullProvider
 
@@ -36,7 +36,7 @@ def _reconcile(declared: dict, measured: dict) -> list[str]:
 
 
 def onboarding_node(state: dict) -> dict:
-    measured = probe(state["fastq"])
+    measured = get_probe(state["tool"])(state["fastq"])
     provider = get_provider()
 
     declared: dict = {}

@@ -12,7 +12,7 @@ from shared.models import Verdict
 
 
 def diagnosis_node(state: dict) -> dict:
-    contract = cl.load_contract("fastqc")
+    contract = cl.load_contract(state["tool"])
     rr = state["run_result"]
     haystack = "\n".join([rr.get("stderr") or "", rr.get("stdout") or "", rr.get("error") or ""])
 
@@ -25,12 +25,12 @@ def diagnosis_node(state: dict) -> dict:
                 escalate=False,
             ).to_dict()}
 
-    # tool-not-installed is its own known condition
+    # tool-not-installed is its own known condition (install hint comes from the contract)
     if rr.get("error") and "not found on PATH" in rr["error"]:
         return {"verdict": Verdict(
             status="failure",
-            findings=["fastqc is not installed"],
-            proposed_fix="Install FastQC: `mamba install -c bioconda fastqc`.",
+            findings=[f"{contract['id']} is not installed"],
+            proposed_fix=f"Install {contract['id']}: `{contract.get('execution', {}).get('install_hint', '')}`.",
             escalate=False,
         ).to_dict()}
 

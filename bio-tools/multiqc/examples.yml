@@ -1,0 +1,75 @@
+intro: "These examples show common MultiQC usage patterns."
+note: "Use these patterns after upstream logs are finalized so report module detection is complete and reproducible."
+warning: "Run examples only after upstream tools have finished writing final logs, or module detection will be incomplete."
+protip: "Use stable sample naming before aggregation so MultiQC merges and labels cohort records consistently."
+variants:
+  BASIC:
+    title: "Generate report from current directory"
+    guide: "Run MultiQC recursively from the current project root when tool outputs are organized under subdirectories."
+    command: |
+      ```bash
+      # scan current directory recursively and generate a default MultiQC report
+      multiqc .
+      ```
+    comment: |
+      - `.` sets recursive scanning root to the current project directory.
+      - Default report naming is suitable for ad-hoc QC review in-place.
+  TARGET_DIR:
+    title: "Scan specific results directory"
+    guide: "Generate a named report in a dedicated output directory for reproducible reruns."
+    command: |
+      ```bash
+      # scan one results directory and write report to explicit output path
+      multiqc -o qc/multiqc -n report.html -f results/
+      ```
+    comment: |
+      - `-o qc/multiqc` writes outputs to a dedicated QC directory.
+      - `-n report.html` pins a deterministic report filename for automation.
+      - `-f results/` restricts parsing scope to finalized pipeline results.
+  MODULE_SELECT:
+    title: "Run selected modules only"
+    guide: "Restrict parsing to selected modules when you want focused QC summaries."
+    command: |
+      ```bash
+      # run only selected modules to produce a focused report
+      multiqc -m fastqc -m star -o qc/multiqc -n focused_report.html -f results/
+      ```
+    comment: |
+      - Repeated `-m` flags whitelist modules to include in the report.
+      - `-n focused_report.html` distinguishes targeted analyses from full cohort runs.
+      - `-f results/` keeps module parsing anchored to intended inputs.
+  MULTI_TOOL_AGGREGATE:
+    title: "Combine multiple tool output directories"
+    guide: "Aggregate outputs from multiple tools in one command when logs are split across step-specific folders."
+    command: |
+      ```bash
+      # merge outputs from multiple tool-specific directories into one report
+      multiqc -o qc_multiqc read_qc/ star_logs/ picard_metrics/ qualimap/
+      ```
+    comment: |
+      - Positional directory arguments add multiple tool-specific sources in one run.
+      - `-o qc_multiqc` centralizes aggregated report assets.
+      - Split source directories preserve workflow-step provenance in a single report.
+  CUSTOM_CONFIG:
+    title: "Use custom config file"
+    guide: "Apply a project config to control report layout, module behavior, and naming conventions."
+    command: |
+      ```bash
+      # apply custom configuration while generating a named report
+      multiqc -c multiqc_config.yaml -o qc/multiqc -n configured_report.html -f results/
+      ```
+    comment: |
+      - `-c multiqc_config.yaml` applies project-level module and rendering rules.
+      - `-n configured_report.html` separates config-driven runs from defaults.
+      - `-f results/` forces overwrite for deterministic reruns to the same target.
+pipelines:
+  P1:
+    workflow: short-read-rnaseq
+    step: read-quality-control
+    summary: Cohort QC Reporting
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  PIPELINE_WORKFLOW: "short-read-rnaseq"
+  PIPELINE_STEP: "read-quality-control"
+extra: {}

@@ -1,0 +1,17 @@
+intro: "MultiQC is usually lightweight compared with upstream alignment/quantification steps and is typically run as a final aggregation stage."
+note: "Performance scales mainly with file count and scan scope: small cohorts are often <30s, medium cohorts ~1-2 min, and larger cohorts can reach several minutes depending on discovered files."
+warning: "Scanning broad project roots can pull stale or irrelevant files and significantly increase parse time."
+protip: |
+  - Point MultiQC at focused result directories to reduce discovery overhead.
+  - Keep report generation after upstream completion markers to avoid partial aggregation.
+  - Preserve `multiqc_data/` with reports for reproducibility and downstream audits.
+variants:
+  cpu: "CPU demand is usually modest; 2-8 cores is generally sufficient for standard reporting workloads."
+  memory: "typically low (often <2 GB), rising modestly for very large module/file sets."
+  parallelization: "benefits mostly from scoped input discovery; internal parsing is lightweight relative to upstream compute tools."
+  gpu_support: "not applicable; no native GPU acceleration."
+  hpc_usage: "well-suited as a short, low-memory final aggregation job after upstream arrays/pipelines complete."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

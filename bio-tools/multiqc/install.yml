@@ -1,0 +1,54 @@
+intro: "Install MultiQC using one supported method, then verify binary availability."
+note: "Use one package manager per environment to reduce dependency conflicts."
+warning: "Keep Python and MultiQC versions pinned across runs to avoid report-format drift."
+protip: "Record `multiqc --version` in pipeline logs for reproducibility audits."
+verify:
+  title: "Verify installation"
+  guide: "Confirm MultiQC resolves and reports expected version."
+  command: |
+    ```bash
+    multiqc --version
+    ```
+  log: |
+    time multiqc --version
+    multiqc, version 1.30
+    real xxx
+    user xxx
+    sys xxx
+variants:
+  SOURCE: |
+    ```bash
+    python3 -m pip install --user multiqc==1.30
+    # ensure ~/.local/bin is on PATH
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+  CONDA: |
+    ```bash
+    conda install -c bioconda multiqc=1.30
+    # or faster
+    mamba install -c bioconda multiqc=1.30
+    ```
+  MICROMAMBA: |
+    ```bash
+    micromamba install -c bioconda multiqc=1.30
+    ```
+  VENV: |
+    ```bash
+    # python -m venv my-env
+    # source my-env/bin/activate
+    pip install multiqc==1.30
+    ```
+  CRAN: "Not supported for this tool."
+  BREW: |
+    ```bash
+    brew install multiqc
+    ```
+embeds:
+  PATH_BINARY_NOTE:
+    folder: notes
+    file: setup
+    items: install-path-binary
+metadata:
+  TEMPLATE_VERSION: "v1"
+  VERSION: "1.30"
+extra: {}

@@ -1,0 +1,9 @@
+intro: "Aggregate QC and summary outputs across samples into one consolidated report."
+note: "This step uses [MultiQC](/biotool#multiqc) to combine upstream logs and metrics into an HTML [qc-report](/biodata#qc-report) plus `multiqc_data`, so the cohort is ready for downstream [analysis](/glossary#analysis), review, and archival."
+warning: "If upstream jobs are incomplete, the final report can underrepresent failed or late samples."
+protip: "Keep sample identifiers consistent across upstream tools so aggregated module records align correctly."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

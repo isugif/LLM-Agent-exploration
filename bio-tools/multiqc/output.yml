@@ -1,0 +1,41 @@
+intro: "MultiQC writes an interactive HTML report plus parsed summary tables for downstream review and automation."
+outputs: ""
+variants:
+  STEP1_RUN_REPORT:
+    title: "Outputs #1: MultiQC report [`HTML`]"
+    guide: "After a successful MultiQC run, the output directory contains the main HTML report and the `multiqc_data/` folder with machine-readable tables:"
+    log: |
+      ls -1 {{OUT}}
+      {{FILENAME}}
+      multiqc_data/
+    note: |
+      *file* | *what is it?* | *practical tip*
+      `{{FILENAME}}` | consolidated interactive QC report across tools/samples | open this first for cohort-level review and sample-to-sample comparison
+      `multiqc_data/` | parsed data tables and module-level outputs | archive with the HTML report for reproducibility and downstream dashboarding
+
+  STEP2_DATA_SUBFILES:
+    title: "Outputs #2: MultiQC data subfiles [*dir*]"
+    guide: "Inside `multiqc_data/`, MultiQC stores parsed summaries and software/version traces:"
+    log: |
+      ls -1 {{OUT}}/multiqc_data
+      multiqc_data.json
+      multiqc_general_stats.txt
+      multiqc_software_versions.txt
+      ...
+    note: |
+      *file* | *what is it?* | *practical tip*
+      `multiqc_data.json` | structured aggregate metrics in JSON format | useful for programmatic post-processing and custom reporting
+      `multiqc_general_stats.txt` | tabular per-sample summary metrics | quick export for spreadsheet review and lightweight tracking
+      `multiqc_software_versions.txt` | detected software/version list from parsed modules | keep for provenance and reproducibility audits
+note: "Keep both the HTML report and `multiqc_data/` together as one QC artifact bundle."
+warning: "If reports are regenerated in-place, ensure versioned filenames to avoid accidental overwrites."
+protip: "Bundle report + `multiqc_data/` as a single published pipeline artifact."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  defaults:
+    DIR: "RNASEQ/workflow"
+    WORKDIR: "qc"
+    OUT: "multiqc_report"
+    FILENAME: "multiqc_project.html"
+extra: {}

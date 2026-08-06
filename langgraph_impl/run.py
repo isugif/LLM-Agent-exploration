@@ -15,8 +15,9 @@ from langgraph_impl.graph import build_graph
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Four-harness FastQC pipeline (LangGraph track)")
-    ap.add_argument("--fastq", required=True)
+    ap = argparse.ArgumentParser(description="Four-harness bioinformatics pipeline (LangGraph track)")
+    ap.add_argument("--tool", default="fastqc", help="which tool's contract to route against")
+    ap.add_argument("--fastq", required=True, help="input (a FASTQ file, or a report dir for aggregators)")
     ap.add_argument("--question", required=True, help="the scientist's request in plain language")
     ap.add_argument("--deliverable", default=None, help="what they want out (defaults to --question)")
     ap.add_argument("--out-dir", default=None)
@@ -24,6 +25,7 @@ def main() -> None:
 
     graph = build_graph()
     final = graph.invoke({
+        "tool": args.tool,
         "fastq": args.fastq,
         "question": args.question,
         "deliverable": args.deliverable or args.question,
@@ -32,6 +34,7 @@ def main() -> None:
 
     report = {
         "track": "langgraph",
+        "tool": args.tool,
         "llm_provider": final.get("llm_provider"),
         "spec": final.get("spec"),
         "route": final.get("route"),

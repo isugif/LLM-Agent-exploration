@@ -6,6 +6,31 @@ changelog so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.2.0] — 2026-08-06
+
+### Changed
+- **Pluggable tools.** De-hardcoded the harness: `tool` added to `PipelineState`, `--tool` flag on
+  the CLI, every `load_contract("fastqc")` → `load_contract(state["tool"])`, execution via the
+  generic `run_tool`, evaluation via `get_parser(tool_id)` with scored metrics derived from the
+  contract's expectation table (removed the hardcoded `SCORED` list). Onboarding probe is selected
+  per tool via `get_probe`. Judgment's boundary-confirmation prompt is now tool-parameterized.
+- shared: contracts moved to `bio-tools/<tool>/contract.yml` (single source of truth per tool);
+  `contracts_lib` reads there and resolves `expectations_ref` against `shared/contracts/expectations/`.
+- shared: new generic `shared/execution/runner.py` (contract-driven argv, list form — no shell);
+  removed `shared/execution/fastqc_runner.py`. New `shared/tools/registry.py` (tool_id → parser +
+  input probe). New `shared/probes/report_dir_probe.py` for aggregator inputs. Schema gained an
+  `execution` block.
+
+### Added
+- MultiQC as a second tool (`bio-tools/multiqc/contract.yml` + `shared/qc/multiqc_parse.py`), wired
+  in with **no track changes** — proof the pluggability works.
+- `tests/` — committed fixtures per failure mode, `tests/cases.yaml`, and `tests/run_tests.py` which
+  runs every case through both tracks and writes `tests/REPORT.md`. Deterministic mode is the gate.
+
+### Verified
+- FastQC regression + LangGraph↔NOOA parity unchanged. MultiQC happy path runs and scores.
+- Deterministic suite: 14 pass / 0 fail / 1 skip. Full `--llm` suite: 16 / 16.
+
 ## [0.1.0] — 2026-08-06
 
 ### Added

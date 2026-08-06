@@ -12,7 +12,10 @@ __pycache__/
 shared/data/*.fastq.gz
 shared/data/*.fastq
 
-# tool outputs
+# tool outputs (committed test fixtures under tests/inputs/ are NOT matched by these)
 *_fastqc.zip
 *_fastqc.html
 fastqc_*/
+multiqc_*/
+multiqc_report.html
+

@@ -1,0 +1,13 @@
+intro: "Use these references for MultiQC modules, config behavior, and release details."
+note: |
+  - **Project homepage:** [multiqc.info](https://multiqc.info/)
+  - **Source repository:** [ewels/MultiQC on GitHub](https://github.com/ewels/MultiQC)
+  - **Official documentation:** [MultiQC docs](https://multiqc.info/docs/)
+  - **Releases:** [MultiQC releases](https://github.com/ewels/MultiQC/releases)
+warning: "Third-party blog examples may use deprecated flags; prefer official docs and release notes."
+protip: "Check module-specific docs when expected tool outputs are not detected automatically."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

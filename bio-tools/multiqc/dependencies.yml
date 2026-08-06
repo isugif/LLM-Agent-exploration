@@ -1,0 +1,20 @@
+intro: "Install MultiQC runtime dependencies first, then optional helpers for report publishing/automation."
+required:
+  PYTHON:
+    item: "Python 3.9+"
+    note: "required runtime for MultiQC; Package metadata may allow broader patch/minor ranges depending on release."
+optional:
+  PANDAS_STACK:
+    item: "python data stack (`pandas`/`polars`/`r`)"
+    note: "optional for downstream parsing of `multiqc_data` tables and files; see [https://docs.seqera.io/multiqc/usage/downstream](https://docs.seqera.io/multiqc/usage/downstream)"
+  WEB_SERVER:
+    item: "static web hosting"
+    note: "for publishing project reports internally"
+note: "See [installation](/biotool#multiqc#install) for supported install methods."
+warning: "Mismatched Python environments can break module discovery or report rendering."
+protip: "Pin MultiQC version in environments to keep report structure stable across runs."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

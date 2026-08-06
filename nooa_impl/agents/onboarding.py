@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from nooa import Agent, strategy
 from nooa.strategies import PredictStrategy
 
-from shared.probes.fastq_probe import probe
+from shared.tools.registry import get_probe
 from shared.models import Spec
 
 
@@ -27,8 +27,8 @@ class OnboardingAgent(Agent):
     """You extract sequencing metadata from a scientist's request, using only what is stated."""
 
     # --- deterministic tools ---
-    def probe_file(self, fastq_path: str) -> dict:
-        return probe(fastq_path)
+    def probe_file(self, input_path: str, tool_id: str = "fastqc") -> dict:
+        return get_probe(tool_id)(input_path)
 
     def reconcile(self, question: str, deliverable: str, declared: dict, measured: dict) -> Spec:
         d = []

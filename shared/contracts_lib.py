@@ -22,8 +22,14 @@ from typing import Any
 
 import yaml
 
+REPO_ROOT = Path(__file__).parent.parent
+# Per-tool contracts live in the tool's own folder — the single source of truth, alongside the
+# human-facing workbook ymls. Expectation tables live in shared/ because they are a property of the
+# ASSAY (e.g. "good RNA-seq quality is >=28"), not of any one tool, and are reused across tools.
+TOOLS_ROOT = REPO_ROOT / "bio-tools"
 CONTRACTS_ROOT = Path(__file__).parent / "contracts"
 SCHEMA_PATH = CONTRACTS_ROOT / "schema" / "contract.schema.json"
+EXPECTATIONS_ROOT = CONTRACTS_ROOT / "expectations"
 
 
 # --------------------------------------------------------------------------- #
@@ -31,7 +37,7 @@ SCHEMA_PATH = CONTRACTS_ROOT / "schema" / "contract.schema.json"
 # --------------------------------------------------------------------------- #
 
 def load_contract(tool_id: str) -> dict[str, Any]:
-    path = CONTRACTS_ROOT / "tools" / f"{tool_id}.yaml"
+    path = TOOLS_ROOT / tool_id / "contract.yml"
     with open(path) as fh:
         return yaml.safe_load(fh)
 
@@ -51,7 +57,7 @@ def load_expectations(contract: dict[str, Any]) -> dict[str, Any]:
     ref = contract.get("expectations_ref")
     if not ref:
         return {}
-    with open(CONTRACTS_ROOT / ref) as fh:
+    with open(EXPECTATIONS_ROOT / ref) as fh:
         return yaml.safe_load(fh)
 
 

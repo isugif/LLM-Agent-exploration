@@ -1,0 +1,53 @@
+intro: "[MultiQC](/biotool#multiqc) consumes existing outputs/logs from upstream tools; it does not require raw reads or reference files directly."
+inputs: |
+  | input source type | tools | what multiqc parses | practical note |
+  |:--|:--|:--|:--|
+  | read quality control | [FastQC](/biotool#fastqc) | `*_fastqc.zip`, `*_fastqc/fastqc_data.txt` | use this for cohort-wide QC comparison before/after trimming |
+  | read trimming/filtering | [Trimmomatic](/biotool#trimmomatic), [Cutadapt](/biotool#cutadapt) | `trimlog` and trimming stdout/stderr logs | keep trimming logs per sample to retain complete module summaries |
+  | read spliced alignment | [HISAT2](/biotool#hisat2), [STAR](/biotool#star) | HISAT2 console logs, STAR `Log.final.out`, alignment summaries | include final per-sample aligner logs, not partial/in-progress outputs |
+  | expression quantification | [featureCounts](/biotool#featurecounts) | `*.summary`, count-table companion summaries | useful for rapid sample-level count/QC sanity checks |
+  | quasi/pseudo mapping quantification | [Salmon](/biotool#salmon), [Kallisto](/biotool#kallisto) | `quant.sf`, `abundance.tsv`, run summary files | module detection depends on expected output layout/version |
+  | alignment quality control | [samtools](/biotool#samtools), [Picard](/biotool#picard) | `flagstat`, `idxstats`, `*Metrics.txt` | keep filenames/sample IDs consistent to avoid cross-sample ambiguity |
+note: |
+  Run MultiQC only after all expected upstream step outputs/logs are complete in scanned paths.
+warning: "Partial directories can produce misleading module completeness and sample counts."
+protip: "Keep one stable project-root scan path so each run aggregates the same upstream artifact set."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  inputs_mode: raw
+extra:
+  EXAMPLE_INPUT_FILES: |
+    <details markdown="1">
+    <summary>Example files MultiQC can process</summary>
+
+    ```text
+    raw_read_qc/SAMPLE1_fastqc.zip
+    raw_read_qc/SAMPLE1_fastqc/fastqc_data.txt
+    trim/SAMPLE1.trimlog
+    align/SAMPLE1.hisat2.log
+    align/SAMPLE1.Log.final.out
+    counts/SAMPLE1.featureCounts.summary
+    quant/SAMPLE1.quant.sf
+    quant/SAMPLE1.abundance.tsv
+    stats/SAMPLE1.flagstat.txt
+    stats/SAMPLE1.idxstats.txt
+    stats/SAMPLE1.alignment_metrics.txt
+    ```
+    </details>
+
+  PROJECT_STRUCTURE: |
+    <details markdown="1">
+    <summary>Example project structure scanned by MultiQC</summary>
+
+    ```text
+    project/
+    ├── raw_read_qc/                # FastQC quality-control reports
+    ├── trim/                       # Trimmomatic / Cutadapt logs
+    ├── align/                      # HISAT2 logs / STAR summaries
+    ├── counts/                     # featureCounts outputs
+    ├── quant/                      # Salmon/Kallisto outputs
+    └── stats/                      # samtools and Picard metrics
+    ```
+    </details>

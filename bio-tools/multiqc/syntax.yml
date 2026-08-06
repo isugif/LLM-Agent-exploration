@@ -1,0 +1,25 @@
+intro: "MultiQC command pattern: `multiqc [options] <analysis_dir>`"
+note: |
+  `-o <output_dir>` | output directory for report files
+  `-n <filename>` | output report filename
+  `-f` | overwrite existing report/output files
+  `-m <module>` | run only selected modules
+  `-e <module>` | exclude selected modules
+  `--interactive` | force interactive plots (where supported)
+warning: "If output paths are reused without `-f`, MultiQC may stop rather than overwrite existing files."
+protip: "Use explicit `-o` and `-n` in pipelines so reports are deterministic and easy to version."
+variants:
+  BASIC: |
+    ```bash
+    # scan the current project directory (or provide a project directory path) and build a MultiQC report
+    multiqc .
+    ```
+  MULTI_TOOL_AGGREGATE: |
+    ```bash
+    # combine outputs from multiple tools into one report
+    multiqc -o qc_multiqc read_qc/ star_logs/ picard_metrics/ qualimap/
+    ```
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

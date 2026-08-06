@@ -1,0 +1,33 @@
+intro: "MultiQC is usually a terminal workflow step that summarizes completed module outputs."
+note: "Trigger MultiQC only after all upstream rules/processes have produced their logs."
+warning: "Ensure workflow dependencies guarantee all module outputs exist before MultiQC executes."
+protip: "Emit report and `multiqc_data` as pipeline artifacts for reproducible QC tracking."
+variants:
+  SNAKEMAKE: |
+    ```python
+    # Aggregate workflow QC logs into one MultiQC report in Snakemake
+    rule multiqc:
+      input: expand("qc/{sample}.done", sample=SAMPLES)
+      output: "qc/multiqc/multiqc_report.html"
+      shell: "multiqc . -o qc/multiqc -n multiqc_report.html -f"
+    ```
+  NEXTFLOW: |
+    ```groovy
+    // Aggregate workflow QC logs into one MultiQC report in Nextflow
+    process MULTIQC {
+      cpus 2
+      input:
+      path results_dir
+      output:
+      path "multiqc_report.html"
+      path "multiqc_data"
+      script:
+      """
+      multiqc ${results_dir} -o . -n multiqc_report.html -f
+      """
+    }
+    ```
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

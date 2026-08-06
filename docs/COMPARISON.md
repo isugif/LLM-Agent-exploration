@@ -83,6 +83,29 @@ outside either framework:
 - **Add a QC check:** add a metric row to `shared/contracts/expectations/*.yaml`. No code change.
 - **Add a harness step:** LangGraph = new node + edge; NOOA = new method + a line in the orchestrator.
 
+## 6. Milestone-2 finding: the two LLM mechanisms need equivalent prompt care
+
+When we added a test suite and ran it in **LLM mode**, one borderline case (refuse a *cohort-level*
+deliverable via a must-not-use boundary) initially **passed on LangGraph but failed on NOOA** —
+same model (`qwen2.5vl:7b`), same boundary text. The cause was not the framework: LangGraph's
+provider builds the whole prompt explicitly (`shared/llm/provider.py`), while NOOA's prompt comes
+from the method **docstring** (`confirm_boundary`), and the two wordings weren't equivalent. Aligning
+the NOOA docstring to state the decision rule as pointedly as the LangGraph system prompt made NOOA
+refuse consistently (3/3), and the full LLM suite went 16/16.
+
+Takeaway: NOOA's "docstring *is* the prompt" is elegant and keeps prompt+type+call together, but it
+also means prompt engineering hides in docstrings — easy to under-invest in versus a prompt you
+wrote out longhand. For an apples-to-apples comparison you must give both mechanisms equivalent
+prompt care. The **deterministic** test suite (committed `tests/REPORT.md`) sidesteps this entirely:
+the pass/fail logic is deterministic, so it's stable regardless of model behavior; the LLM-dependent
+case is exercised only with `--llm`.
+
+## 7. Adding a tool — identical for both tracks
+
+Because the tool library is shared data, adding MultiQC (contract.yml + parser + report-dir probe)
+required **zero changes to either track**. The de-hardcoding (thread `tool_id`, derive scored metrics
+from the contract, generic argv runner) is what made both orchestrations tool-agnostic at once.
+
 ## Open questions to revisit as the project grows
 
 - Does LangGraph's explicit state pay off once we add retries, checkpoints, and human-in-the-loop

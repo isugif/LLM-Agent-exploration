@@ -1,0 +1,9 @@
+intro: "Custom content is intentionally omitted unless a project requires tool-specific overrides."
+note: "Use this section only for site-local behavior not already captured by standard sections."
+warning: "Avoid duplicating canonical guidance here; conflicts with core sections can create drift."
+protip: "If you add custom snippets, tie them to a validated pipeline context and keep paths explicit."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

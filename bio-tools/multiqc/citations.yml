@@ -1,0 +1,36 @@
+intro: "If you use this tool in your research, please cite the following publication(s):"
+note: |
+  ```text
+  Ewels P, Magnusson M, Lundin S, Kaller M. (2016).
+  MultiQC: summarize analysis results for multiple tools and samples in a single report.
+  Bioinformatics, 32(19), 3047-3048.
+
+  ```
+  [[CITATION]]
+warning: "Cite MultiQC for report aggregation/visualization; cite each underlying producer tool separately for metric generation methods."
+protip: "Ensure methods list both MultiQC and upstream tools (for example FastQC, STAR, samtools) so aggregation is not misattributed as metric computation."
+variants:
+  NO_RELATED_PAPERS:
+    title: "No validated MultiQC-specific related paper"
+    link: "https://multiqc.info"
+    search_scope: "Searched for MultiQC method extensions/secondary papers beyond the primary Bioinformatics 2016 citation; no clearly tool-specific peer-reviewed related publication was validated."
+    evidence_source: body
+    evidence_text: "Project documentation and public references point to the primary paper as the canonical citation; additional items are typically module/tool-specific rather than MultiQC method papers."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  CITATION:
+    folder: bio-tools
+    file: index
+    items: multiqc.citation
+  LICENSE:
+    folder: bio-tools
+    file: index
+    items: multiqc.license
+  TOOLS:
+    folder: bio-tools
+    file: index
+    items: multiqc.tools
+extra:
+  LICENSE: "**License:** [[LICENSE]]"
+  RELATED_TOOLS: "[[TOOLS]]"

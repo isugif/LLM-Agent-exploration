@@ -1,0 +1,13 @@
+intro: "MultiQC provides a primary CLI executable for report aggregation."
+note: "Call the MultiQC help page from your active environment when checking module and output-control behavior."
+warning: "Module auto-detection depends on recognizable upstream filenames and standard output layouts."
+protip: "Check help text and module listing in the active environment to confirm available parsers before production runs."
+variants:
+  MULTIQC:
+    item: "`multiqc`"
+    description: "scan result directories and build consolidated reports"
+    syntax: "`multiqc [options] <path>`"
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

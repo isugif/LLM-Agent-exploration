@@ -35,11 +35,25 @@ Two design commitments make this more than four LLM vibe checks:
    "I cannot assess this." A system that always routes will always produce something — and
    confident output on an unanswerable question is exactly the failure mode we're eliminating.
 
-## This milestone: one tool, FastQC
+## Adding a tool (pluggable)
 
-FastQC is small and fast, so the whole loop runs in seconds. The contract for it lives at
-`shared/contracts/tools/fastqc.yaml` and deliberately fills the gaps a documentation-style
-description leaves open:
+A tool is **data + two small functions**, no harness changes:
+
+- **Data:** `bio-tools/<tool>/contract.yml` — the enforceable contract, living in the same folder as
+  the tool's human-facing workbook ymls (single source of truth per tool).
+- **Code:** a parser (`shared/qc/<tool>_parse.py`) and — only for a new input type — a probe
+  (`shared/probes/<type>_probe.py`), both registered in `shared/tools/registry.py`.
+
+Everything else is tool-agnostic: the contract's `execution.argv` drives a generic runner
+(`shared/execution/runner.py`), and the scored metrics are the keys of the contract's expectation
+table (no hardcoded metric list). Run with `--tool <id>`. Full guide: [ADD_A_TOOL.md](ADD_A_TOOL.md).
+MultiQC is wired in as a second tool this way.
+
+## The contract, on FastQC
+
+FastQC is small and fast, so the whole loop runs in seconds. Its contract lives at
+`bio-tools/fastqc/contract.yml` and deliberately fills the gaps a documentation-style description
+leaves open:
 
 - **preconditions** — assertable expressions (`measured.n_reads_sampled > 0`) evaluated by a
   restricted expression evaluator (no `eval`), see `shared/contracts_lib.py`.
@@ -88,6 +102,9 @@ switched off. The LLM sharpens judgment; it is never the thing that decides pass
 
 ## Not yet built (future milestones)
 
+- **Judgment "retrieve & match"** — auto-selecting the tool by ranking candidate contracts against
+  the spec. Today the tool is named with `--tool`; the pluggable contract library makes automatic
+  selection the natural next step.
 - The human-curation loop that turns novel escalations into new versioned contract entries.
-- More than one tool / real workflow composition (reuse vs. adapt vs. compose).
+- Real workflow composition (reuse vs. adapt vs. compose) across multiple tools.
 - A shared incident library persisted across runs.

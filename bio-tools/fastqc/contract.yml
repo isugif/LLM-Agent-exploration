@@ -1,4 +1,9 @@
-# contract for FastQC — validates against ../schema/contract.schema.json
+# Enforceable contract for FastQC — validates against
+# ../../shared/contracts/schema/contract.schema.json
+#
+# This is the machine-checkable layer that sits alongside the human-facing workbook ymls in this
+# same folder (install.yml, hpc.yml, usage.yml, troubleshooting.yml, ...). The harness reads THIS
+# file; the workbook files stay as prose context.
 id: fastqc
 kind: tool
 version: "0.12.1"
@@ -20,6 +25,12 @@ interface:
     - format: zip
       contains: fastqc_data.txt
       note: "machine-readable module tables; parse this for scripted QC"
+
+# --- how to run it (generic runner renders this; list form => no shell, no injection) ---
+execution:
+  argv: [fastqc, -t, "{threads}", -o, "{out_dir}", "{input}"]
+  version_argv: [fastqc, --version]
+  install_hint: "mamba install -c bioconda fastqc"
 
 # --- assertable preconditions (checked against declared.* / measured.* facts) ---
 preconditions:
@@ -86,4 +97,4 @@ gotchas:
   - "FastQC evaluates each file independently — a PE dataset yields separate reports per mate; do not read one mate as the pair."
   - "Version-scoped: thresholds and module set here are for 0.12.x; older 0.11.x differs (e.g. added modules, per-tile quality)."
 
-expectations_ref: expectations/rnaseq_qc.yaml
+expectations_ref: rnaseq_qc.yaml

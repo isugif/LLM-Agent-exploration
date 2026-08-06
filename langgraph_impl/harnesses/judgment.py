@@ -24,7 +24,8 @@ class BoundaryCheck(BaseModel):
     reason: str = Field(description="one short sentence")
 
 
-def _confirm_boundary(provider, deliverable: str, boundary: dict) -> tuple[bool, str]:
+def _confirm_boundary(provider, tool_id: str, tool_summary: str,
+                      deliverable: str, boundary: dict) -> tuple[bool, str]:
     """Ask the LLM whether a keyword-matched boundary is a genuine violation.
 
     Degradation rule: if no LLM, do NOT auto-refuse on a keyword hit (that over-refuses).
@@ -35,17 +36,16 @@ def _confirm_boundary(provider, deliverable: str, boundary: dict) -> tuple[bool,
     res = provider.extract(
         BoundaryCheck,
         system=(
-            "You are a fit critic for the tool FastQC, which ONLY produces quality-control reports "
-            "(it never trims, cleans, aggregates, or identifies organisms). Decide whether the user "
-            "is asking FastQC ITSELF to perform the forbidden action described by the boundary. "
-            "Merely mentioning a separate, later, or downstream step is NOT a violation. For example, "
-            "'QC the reads before trimming' asks only for QC (allowed); the trimming is a different "
-            "step done by a different tool. Set violates=true only if FastQC itself is being asked to "
-            "do the forbidden thing."
+            f"You are a fit critic for the tool {tool_id} ({tool_summary}). Decide whether the user "
+            f"is asking {tool_id} ITSELF to perform the forbidden action described by the boundary. "
+            "Merely mentioning a separate, later, or downstream step is NOT a violation (e.g. "
+            "'QC the reads before trimming' asks only for QC — the trimming is a different step done "
+            f"by a different tool). Set violates=true only if {tool_id} itself is being asked to do "
+            "the forbidden thing."
         ),
         prompt=f"Forbidden use (boundary): {boundary['boundary']}\n"
                f"User's requested deliverable: {deliverable}\n"
-               f"Is the user asking FastQC itself to do the forbidden thing?",
+               f"Is the user asking {tool_id} itself to do the forbidden thing?",
     )
     if res is None:
         return False, f"boundary '{boundary['id']}' inconclusive (LLM parse failed); allowed with warning"
@@ -53,7 +53,7 @@ def _confirm_boundary(provider, deliverable: str, boundary: dict) -> tuple[bool,
 
 
 def judgment_node(state: dict) -> dict:
-    contract = cl.load_contract("fastqc")
+    contract = cl.load_contract(state["tool"])
     spec = state["spec"]
     provider = get_provider()
 
@@ -63,8 +63,10 @@ def judgment_node(state: dict) -> dict:
 
     # 2) must-not-use boundaries (keyword pre-filter -> LLM confirmation)
     boundary_hits, confirmed = [], []
+    tool_id = contract["id"]
+    tool_summary = (contract.get("summary") or "").strip()
     for b in cl.match_boundaries(contract, spec["deliverable"]):
-        violates, reason = _confirm_boundary(provider, spec["deliverable"], b)
+        violates, reason = _confirm_boundary(provider, tool_id, tool_summary, spec["deliverable"], b)
         boundary_hits.append(f"{b['id']}: {reason}")
         if violates:
             confirmed.append(b["id"])
