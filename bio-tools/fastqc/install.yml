@@ -1,0 +1,51 @@
+intro: "Install the tool using one supported method for your environment, then verify the binary is available in your shell path."
+note: "Choose one method only; avoid mixing package managers in the same environment."
+warning: "Pin FastQC version across cohort runs to keep module outputs and report formatting consistent."
+protip: "Record `fastqc --version` in pipeline logs for reproducibility auditing."
+verify:
+  title: "Verify installation"
+  guide: "Confirm FastQC resolves and reports expected version."
+  command: |
+    ```bash
+    fastqc --version
+    ```
+  log: |
+    time fastqc --version
+    FastQC v0.11.9
+    real xxx
+    user xxx
+    sys xxx
+variants:
+  SOURCE: |
+    ```bash
+    wget https://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v0.11.9.zip
+    unzip fastqc_v0.11.9.zip
+    cd FastQC
+    chmod +x fastqc
+    ln -s $(pwd)/fastqc /usr/local/bin/fastqc
+    ```
+  CONDA: |
+    ```bash
+    conda install -c bioconda fastqc=0.11.9
+    # or faster
+    mamba install -c bioconda fastqc=0.11.9
+    ```
+  MICROMAMBA: |
+    ```bash
+    micromamba install -c bioconda fastqc=0.11.9
+    ```
+  VENV: "Not supported for this tool."
+  CRAN: "Not supported for this tool."
+  BREW: |
+    ```bash
+    brew install fastqc
+    ```
+embeds:
+  PATH_BINARY_NOTE:
+    folder: notes
+    file: setup
+    items: install-path-binary
+metadata:
+  TEMPLATE_VERSION: "v1"
+  VERSION: "0.11.9"
+extra: {}

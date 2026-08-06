@@ -1,0 +1,15 @@
+intro: "Common [FastQC](/biotool#fastqc) issues and fixes."
+note: ""
+warning: "Most failures are caused by unreadable or malformed input files rather than report generation logic."
+protip: "Reduce scope to one sample when debugging, then scale once the minimal run is clean."
+variants:
+  JAVA_MEMORY:
+    issue: "OutOfMemoryError on large files"
+    fix: "Increase heap, e.g. `export _JAVA_OPTIONS=\"-Xmx4G\"`."
+  HTML_RENDER:
+    issue: "HTML report display issues"
+    fix: "Serve report directory via `python -m http.server`."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

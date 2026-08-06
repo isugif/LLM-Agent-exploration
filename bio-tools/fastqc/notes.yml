@@ -1,0 +1,31 @@
+intro: "Use these notes to avoid common [FastQC](/biotool#fastqc) pitfalls and keep QC review efficient across projects."
+note: ""
+warning:
+  title: "Known issues"
+  note: |
+    - Very long reads can make some plots slower to render; for quick checks, you can inspect a subset first.
+    - Adapter/overrepresented-sequence flags may include biologically real motifs; interpret in experiment context.
+    - If HTML reports fail in restricted browser mode, serve the directory locally (`python -m http.server`) and open via `http://localhost`.
+    - FastQC supports FASTQ and also SAM/BAM input modes; for RNA-seq QC interpretation, raw/trimmed FASTQ reports are usually the primary reference.
+protip:
+  title: "Performance tips"
+  note: |
+    - Run sample-level FastQC jobs concurrently across cores/nodes for cohort throughput.
+    - Use `-t` per job to reduce runtime on large files.
+    - For many samples, aggregate FastQC outputs with [MultiQC](/biotool#multiqc) for side-by-side review.
+variants:
+  BEFORE_TRIMMING:
+    title: "Before trimming"
+    note: "Run FastQC on raw reads to detect adapter content, per-base quality decay, and overrepresented sequences before deciding trimming strategy."
+
+  AFTER_TRIMMING:
+    title: "After trimming"
+    note: "Run FastQC again on trimmed reads and compare key modules against raw-read reports to confirm cleanup worked as intended."
+
+  RAW_METRICS_FALLBACK:
+    title: "When report rendering fails"
+    note: "Inspect `fastqc_data.txt` from the `*_fastqc.zip` archive to review raw module metrics without relying on browser rendering."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

@@ -1,0 +1,57 @@
+# Expected-range table for read QC — the "is this reasonable?" data structure.
+#
+# The results-evaluation harness scores parsed FastQC metrics against these ranges.
+# Without this table, "is this reasonable?" collapses into an LLM vibe check that will
+# confidently accept a bad result. Ranges are keyed by context (assay/platform); extend
+# by adding metrics or new context blocks — no harness code changes needed.
+#
+# Each metric defines thresholds. The evaluator picks the worst tier a value falls into:
+#   ok   -> within `ok`
+#   warn -> within `warn`
+#   fail -> within `fail`
+# Comparators supported: gte, lte, gt, lt, between:[lo,hi].
+
+context:
+  assay: rna-seq
+  platform: illumina
+  organism_scope: general        # GC expectations are organism-dependent; see note below
+
+metrics:
+  per_base_mean_quality:
+    description: "Mean Phred quality averaged across all base positions."
+    unit: phred
+    ok:   { gte: 28 }
+    warn: { between: [20, 28] }
+    fail: { lt: 20 }
+
+  percent_gc:
+    description: "Overall %GC of the library."
+    unit: percent
+    # GC is organism-dependent — this is a wide sanity band, not a tight expectation.
+    ok:   { between: [30, 60] }
+    warn: { between: [20, 70] }   # wider band; ok wins for values inside [30,60] (best-first scoring)
+    fail: { not_between: [15, 80] }  # two-sided: fail only for extreme GC on either side
+    note: "GC content is organism-dependent. Treat as a sanity band; a value outside it warrants checking the organism, not automatically a failure."
+
+  percent_duplication:
+    description: "Estimated fraction of duplicate reads (100 - Total Deduplicated Percentage)."
+    unit: percent
+    ok:   { lt: 50 }
+    warn: { between: [50, 80] }
+    fail: { gte: 80 }
+    note: "High duplication is often NORMAL for RNA-seq (highly expressed transcripts). Escalate as anomaly, not failure."
+
+  overrepresented_percent:
+    description: "Percent of reads flagged as overrepresented sequences (top hit)."
+    unit: percent
+    ok:   { lt: 1 }
+    warn: { between: [1, 5] }
+    fail: { gte: 5 }
+
+  adapter_content_max_percent:
+    description: "Maximum adapter content reached at any position."
+    unit: percent
+    ok:   { lt: 5 }
+    warn: { between: [5, 20] }
+    fail: { gte: 20 }
+    note: "Non-zero adapter content before trimming is expected; this flags whether trimming is needed."

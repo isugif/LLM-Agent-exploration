@@ -1,0 +1,183 @@
+intro: |
+  [FastQC](/biotool#fastqc) can process multiple input files in one command, but for large cohorts on SLURM you should choose an explicit batch strategy based on cores, queue policy, and logging needs.
+
+note: |
+  *method* | *How it runs?* | *When to use?* | *notes*  
+  **fastqc_multi_input** | one FastQC command with many inputs | fastest setup; minimal scripting; internal threading | single command path, less granular control  
+  **sequential_loop** | single job; samples processed one-by-one | simple; when CPU usage is limited | one job log, stable baseline, easiest debugging  
+  **GNU-Parallel** | single job; multiple samples processed in parallel | preferred for multi-core nodes | best throughput on high-core nodes  
+  **SLURM Job Array** | separate job per input file | ideal for HPC environments; better log separation | scheduler-managed fan-out and per-task logs  
+
+runtime:
+  title: "Runtime Benchmark"
+  note: "Benchmark summary across execution methods for this workload; CPU and walltime columns report measured runtime behavior."
+  rules: "[[HPC_LOOP_PARALLEL_ARRAY_RULES]]"
+  benchmark: |
+    **Runtime Benchmark** (FastQC batch mode):
+
+    *method* | *CPU_cores* | *walltime* | *real* | *user* | *sys*
+    --- | --- | --- | --- | --- | ---
+    fastqc_multi_input | 8 | xxx | xxx | xxx | xxx
+    sequential_loop | 8 | xxx | xxx | xxx | xxx
+    GNU-Parallel | 24 | xxx | xxx | xxx | xxx
+    SLURM Job Array | 48+ | xxx | xxx | xxx | xxx
+
+script:
+  title: "Batch Script"
+  guide: "Create a SLURM script `run_fastqc.sh` and paste one of the code blocks below (`SINGLE_CMD`, `LOOP`, `PARALLEL`, or `ARRAY`). Customize paths and resources as needed."
+  command: |
+    ```bash
+    #!/usr/bin/env bash
+    #SBATCH --job-name=fastqc-batch
+    #SBATCH --output=fastqc.%j.out
+    #SBATCH --error=fastqc.%j.err
+    #SBATCH --time=02:00:00
+    #SBATCH --cpus-per-task=24        # adjust based on selected method
+    #SBATCH --mem=32G
+    ##SBATCH --array=0-5              # enable for Option D: array
+
+    module load fastqc
+
+    base="/work/alex/RNASEQ/workflow"
+    IN="$base/00_raw_data"
+    OUT="$base/01_read_qc/qc_raw_reads"
+    mkdir -p "$OUT"
+
+    ### Option A - SINGLE FASTQC CMD
+    # fastqc -t 24 -o "$OUT" "$IN"/*.fastq.gz     # default option: fastqc_multi_input 
+    ### Option B - LOOP
+    # paste code for loop here
+    ### Option C - PARALLEL
+    # paste code for GNU parallel here
+    ### Option D - ARRAY
+    # paste code for array here
+    ```
+
+variants:
+  SINGLE_CMD:
+    title: "Option A: fastqc_multi_input"
+    guide: "Uses FastQC built-in multi-file handling in one command call."
+    command: |
+      ```bash
+      # SINGLE_CMD: one FastQC invocation for all input files
+      fastqc -t 24 -o "$OUT" "$IN"/*.fastq.gz
+      ```
+    comment: "Minimal scripting and quick setup; useful when input naming/layout is already consistent."
+
+  LOOP:
+    title: "Option B: Sequential loop"
+    guide: "Runs one sample after another in a single SLURM job."
+    command: |
+      ```bash
+      # LOOP: paired-end aware, one sample at a time
+      shopt -s nullglob
+      for r1 in "$IN"/*_1.fastq.gz; do
+        sample=$(basename "$r1" _1.fastq.gz)
+        r2="$IN/${sample}_2.fastq.gz"
+
+        if [[ -f "$r2" ]]; then
+          fastqc -t 8 -o "$OUT" "$r1" "$r2"
+        else
+          fastqc -t 8 -o "$OUT" "$r1"
+        fi
+      done
+      ```
+    comment: "Simple and robust; good starting point when sample count is moderate."
+
+  PARALLEL:
+    title: "Option C: GNU Parallel"
+    guide: "Runs multiple FastQC tasks concurrently inside one SLURM allocation."
+    command: |
+      ```bash
+      # PARALLEL: one FastQC process per file
+      module load parallel
+      find "$IN" -maxdepth 1 -type f -name "*.fastq.gz" \
+        | sort \
+        | parallel -j 24 'fastqc -t 1 -o "$OUT" {}'
+      ```
+    comment: "Preferred for high-core nodes when you want one job allocation and high throughput."
+
+  ARRAY:
+    title: "Option D: SLURM Job Array"
+    guide: "Runs one SLURM task per input file for scheduler-level parallelization."
+    command: |
+      ```bash
+      # ARRAY: one file per SLURM task
+      mapfile -t FILES < <(find "$IN" -maxdepth 1 -type f -name "*.fastq.gz" | sort)
+      FILE="${FILES[$SLURM_ARRAY_TASK_ID]}"
+
+      fastqc -t 2 -o "$OUT" "$FILE"
+      ```
+    comment: "Best for very large cohorts and clear per-task log isolation."
+
+submit:
+  title: "Submit a Job"
+  guide: "Submit `run_fastqc.sh`, then check queue status and output logs."
+  command: |
+    ```bash
+    sbatch run_fastqc.sh # update script filename
+    ```
+  log: |
+    sbatch run_fastqc.sh
+    Submitted batch job 12345678
+
+warning: "[[SLURM_RESOURCE_LIMITS_WARNING]]"
+
+protip: |
+  - [[SLURM_SINGLE_METHOD_PROTIP]]
+  - [[SLURM_ARRAY_RANGE_PROTIP]]
+  - [[SLURM_ABSOLUTE_PATHS_PROTIP]]
+
+embeds:
+  HPC_LOOP_PARALLEL_ARRAY_RULES:
+    folder: notes
+    file: setup
+    items: loop-parallel-array-guidance
+  SLURM_RESOURCE_LIMITS_WARNING:
+    folder: notes
+    file: setup
+    items: slurm-resource-limits
+  SLURM_SINGLE_METHOD_PROTIP:
+    folder: notes
+    file: setup
+    items: slurm-single-method
+  SLURM_ARRAY_RANGE_PROTIP:
+    folder: notes
+    file: setup
+    items: slurm-array-range
+  SLURM_ABSOLUTE_PATHS_PROTIP:
+    folder: notes
+    file: setup
+    items: slurm-absolute-paths
+
+metadata:
+  TEMPLATE_VERSION: "v1"
+  defaults: {}
+
+extra:
+  title: "Enhancements & Optional Arguments"
+  guide: "This section shows optional flags that enhance FastQC's functionality depending on input type and downstream needs."
+  enhancements:
+    NOGROUP:
+      title: "Per-base Resolution (`--nogroup`)"
+      guide: "Use when read lengths are long and you need unbinned per-position quality trends."
+      command: |
+        ```bash
+        fastqc --nogroup -t 8 -o "$OUT" "$IN"/*.fastq.gz
+        ```
+
+    EXTRACT:
+      title: "Auto-extract ZIP Contents (`--extract`)"
+      guide: "Expands report archives immediately so downstream parsing can read uncompressed result files."
+      command: |
+        ```bash
+        fastqc --extract -t 8 -o "$OUT" "$IN"/*.fastq.gz
+        ```
+
+    KMERS:
+      title: "Custom K-mer Size (`--kmers`)"
+      guide: "Adjust k-mer analysis sensitivity for targeted artifact inspection."
+      command: |
+        ```bash
+        fastqc --kmers 10 -t 8 -o "$OUT" "$IN"/*.fastq.gz
+        ```

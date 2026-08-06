@@ -1,0 +1,9 @@
+intro: "Evaluate sequencing read quality and generate interpretable QC reports for preprocessing decisions."
+note: "This step evaluates [raw RNA sequencing reads](/biodata#raw-reads-rna#sample) in [FASTQ format](/biodata#fastq#format) with [FastQC](/biotool#fastqc), produces [QC reports](/biodata#qc-report), and supports [read-quality-control](/pipeline#short-read-rnaseq#read-quality-control) in the [short-read-rnaseq](/pipeline#short-read-rnaseq) workflow before trimming and downstream analysis."
+warning: "Task output quality depends on input integrity and complete file availability at execution time."
+protip: "Store FastQC HTML and ZIP artifacts together to preserve both visual and machine-readable records."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

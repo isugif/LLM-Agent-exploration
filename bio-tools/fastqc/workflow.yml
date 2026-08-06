@@ -1,0 +1,29 @@
+intro: "[FastQC](/biotool#fastqc) integration snippets for workflow systems."
+note: ""
+warning: "Trigger workflow execution only after upstream read generation and transfer steps are complete."
+protip: "Emit FastQC outputs as pipeline artifacts to maintain reproducible quality checkpoints."
+variants:
+  SNAKEMAKE: |
+    ```python
+    # Run FastQC per sample in Snakemake
+    rule fastqc:
+      threads: 4
+      input: fq="{sample}.fastq.gz"
+      output: html="{sample}_fastqc.html", zip="{sample}_fastqc.zip"
+      shell: "fastqc -t {threads} -o qc_reports {input.fq}"
+    ```
+  NEXTFLOW: |
+    ```groovy
+    // Run FastQC per input file in Nextflow
+    process fastqc {
+      input: path fastq
+      output: path "*_fastqc.*"
+      script: """
+      fastqc ${fastq}
+      """
+    }
+    ```
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

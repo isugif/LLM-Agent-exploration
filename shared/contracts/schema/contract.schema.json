@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/bioagent/contract.schema.json",
+  "title": "Component contract",
+  "description": "A machine-readable contract for a bioinformatics component (tool/db/data type/workflow). Declares preconditions, operating range, and must-not-use boundaries so a fit-critic can reject a workflow that would RUN but be WRONG. This is the enforceable core the workbook prose ymls lack.",
+  "type": "object",
+  "required": ["id", "kind", "version", "interface", "preconditions", "operating_range", "must_not_use", "failure_modes"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "description": "Stable component id, e.g. 'fastqc'." },
+    "kind": { "type": "string", "enum": ["tool", "database", "datatype", "workflow"] },
+    "version": { "type": "string", "description": "Version this contract is scoped to. Contracts are version-scoped: a gotcha true for 0.12.x may be false for 0.11.x." },
+    "summary": { "type": "string" },
+
+    "interface": {
+      "type": "object",
+      "description": "Inputs/outputs and formats — the 'Interface' contract section.",
+      "required": ["inputs", "outputs"],
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["format"],
+            "properties": {
+              "format": { "type": "string" },
+              "compression": { "type": "array", "items": { "type": "string" } },
+              "layout": { "type": "array", "items": { "type": "string", "enum": ["SE", "PE"] } }
+            }
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["format"],
+            "properties": {
+              "format": { "type": "string" },
+              "contains": { "type": "string" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "preconditions": {
+      "type": "array",
+      "description": "Assertable conditions the input must satisfy. Each `assert` is a restricted boolean expression over the fact namespace (declared.*, measured.*). Evaluated by shared/contracts_lib.py — NOT python eval.",
+      "items": {
+        "type": "object",
+        "required": ["id", "assert", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "assert": { "type": "string", "description": "e.g. \"measured.n_reads > 0\"" },
+          "severity": { "type": "string", "enum": ["block", "warn"] },
+          "message": { "type": "string" }
+        }
+      }
+    },
+
+    "operating_range": {
+      "type": "object",
+      "description": "Validated operating range. Numeric bounds are advisory (warn) unless also encoded as a precondition.",
+      "additionalProperties": true
+    },
+
+    "must_not_use": {
+      "type": "array",
+      "description": "Off-label boundaries — the key gap the STAR scorecard flagged. Prose boundaries the judgment harness checks the requested DELIVERABLE against.",
+      "items": {
+        "type": "object",
+        "required": ["id", "boundary"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "boundary": { "type": "string", "description": "What the tool must NOT be used for." },
+          "keywords": { "type": "array", "items": { "type": "string" }, "description": "Deliverable keywords that likely trip this boundary (cheap deterministic pre-filter before any LLM check)." }
+        }
+      }
+    },
+
+    "failure_modes": {
+      "type": "array",
+      "description": "Known hard failures with a detection SIGNAL the diagnosis harness greps stderr/stdout for, plus a known fix.",
+      "items": {
+        "type": "object",
+        "required": ["id", "signal", "fix"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "signal": { "type": "string", "description": "Substring/regex found in stderr/stdout when this failure occurs." },
+          "fix": { "type": "string" }
+        }
+      }
+    },
+
+    "gotchas": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "expectations_ref": {
+      "type": "string",
+      "description": "Relative path (from the contracts/ root) to the expected-range table the results-evaluation harness scores output against."
+    }
+  }
+}

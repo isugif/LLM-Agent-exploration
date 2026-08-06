@@ -1,0 +1,45 @@
+intro: "If you use this tool in your research, please cite the following publication(s):"
+note: |
+  ```text
+  Andrews S. (2010). FastQC: A Quality Control Tool for High Throughput Sequence Data.
+  Babraham Bioinformatics, Babraham Institute, Cambridge, United Kingdom.
+  ```
+  [[CITATION]]
+warning: "Cite FastQC for per-sample QC diagnostics only; do not use it as the citation for multi-sample aggregation outputs."
+protip: "When MultiQC summarizes FastQC modules, keep both citations and distinguish module-level QC (FastQC) from aggregation/reporting (MultiQC)."
+variants:
+  FASTQ_SCREEN_2018:
+    title: "Wingett SW, Andrews S. (2018). FastQ Screen: A tool for multi-genome mapping and quality control. F1000Research, 7:1338."
+    link: "https://doi.org/10.12688/f1000research.15931.2"
+    tags:
+      - "multi-genome-qc"
+      - "contamination-screen"
+      - "fastqc-ecosystem"
+    evidence_source: body
+    evidence_text: "FastQ Screen is routinely combined with FastQC in read-QC workflows to complement FastQC module interpretation with contamination/context checks."
+  FQC_DASHBOARD_2017:
+    title: "Brown J, Pirrung M, McCue LA. (2017). FQC Dashboard: integrates FastQC results into a web-based, interactive, and extensible FASTQ quality control tool. Bioinformatics, 33(19):3137-3139."
+    link: "https://doi.org/10.1093/bioinformatics/btx373"
+    tags:
+      - "multi-sample-reporting"
+      - "dashboard"
+      - "quality-summary"
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  CITATION:
+    folder: bio-tools
+    file: index
+    items: fastqc.citation
+  LICENSE:
+    folder: bio-tools
+    file: index
+    items: fastqc.license
+  TOOLS:
+    folder: bio-tools
+    file: index
+    items: fastqc.tools
+extra:
+  AUTHOR: "**Author:** Simon Andrews <simon.andrews@babraham.ac.uk>"
+  LICENSE: "**License:** [[LICENSE]]"
+  RELATED_TOOLS: "[[TOOLS]]"

@@ -1,0 +1,20 @@
+intro: "Use official fastqc resources for source code and documentation."
+note: ""
+warning: "Reference only official upstream repositories and project pages to avoid stale mirrors."
+protip: "Keep source and documentation links aligned to the same release family used in production."
+variants:
+  LINKS: |
+    - [GitHub Repository]([[TOOL_SOURCE]])
+    - [Project Homepage]([[TOOL_HOMEPAGE]])
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  TOOL_SOURCE:
+    folder: bio-tools
+    file: index
+    items: fastqc.source
+  TOOL_HOMEPAGE:
+    folder: bio-tools
+    file: index
+    items: fastqc.homepage
+extra: {}

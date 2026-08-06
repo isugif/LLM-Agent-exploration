@@ -1,0 +1,56 @@
+intro: "Run [FastQC](/biotool#fastqc) on one file (single-end) or paired files, then review per-file QC signals."
+note: "Use output directory arguments to write reports into a project-specific folder."
+warning: "Run usage commands only after input transfer and decompression checks are complete."
+protip: "For cohort-scale projects, run FastQC per sample and then aggregate reports with [MultiQC](/biotool#multiqc)."
+variants:
+  SINGLE:
+    title: "Mode: single-end reads"
+    variant_type: "mode"
+    variant_tag: "Mode 1"
+    guide: "Process one sample with single-end input (`{{INPUT}}`):"
+    command: |
+      ```bash
+      # Runs FastQC on single-end reads with 2 threads
+      fastqc -t 2 -o {{DIR}}/{{OUT}} {{INPUT}}
+      ```
+    comment: |
+      - `-t 2` sets moderate per-file thread usage.
+      - `-o {{DIR}}/{{OUT}}` pins report location for reproducible collection.
+    log: |
+      time fastqc -t 2 -o {{DIR}}/{{OUT}} {{INPUT}}
+      Analysis complete for {{INPUT}}
+
+      real    xxx
+      user    xxx
+      sys     xxx
+  PAIRED:
+    title: "Mode: paired-end reads"
+    variant_type: "mode"
+    variant_tag: "Mode 2"
+    guide: "Process one sample with paired-end inputs (`{{INPUT1}}`, `{{INPUT2}}`):"
+    command: |
+      ```bash
+      # Runs FastQC on paired-end reads with 2 threads
+      fastqc -t 2 -o {{DIR}}/{{OUT}} {{INPUT1}} {{INPUT2}}
+      ```
+    comment: |
+      - `-t 2` applies the same thread cap used in single-end mode.
+      - `-o {{DIR}}/{{OUT}}` keeps both mate reports in one deterministic output path.
+    log: |
+      time fastqc -t 2 -o {{DIR}}/{{OUT}} {{INPUT1}} {{INPUT2}}
+      Analysis complete for {{INPUT2}}
+      Analysis complete for {{INPUT1}}
+
+      real    xxx
+      user    xxx
+      sys     xxx
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  defaults:
+    DIR: ".."
+    OUT: "01_read_qc"
+    INPUT: "SRR4420293.fastq.gz"
+    INPUT1: "SRR4420293_1.fastq.gz"
+    INPUT2: "SRR4420293_2.fastq.gz"
+extra: {}

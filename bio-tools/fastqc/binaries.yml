@@ -1,0 +1,15 @@
+intro: "Besides report files, [FastQC](/biotool#fastqc) provides a primary command-line executable for generating read-quality reports from sequencing inputs."
+variants:
+  FASTQC:
+    binary: "`fastqc`"
+    description: "generate per-file QC reports"
+    syntax: "`fastqc [options] <reads_1.fastq.gz> [reads_2.fastq.gz]`"
+note: "Call with `-h/--help` to inspect options and with `--version` to check the installed release."
+warning: "FastQC availability can differ by channel packaging; verify runtime before batch runs."
+protip: |
+  - Use `-o <dir>` to keep reports in a project-specific output folder.
+  - Use `-t <threads>` for faster runs on larger datasets.
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}
