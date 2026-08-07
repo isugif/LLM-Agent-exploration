@@ -28,6 +28,9 @@ unchanged.
   dropped from the machine contract (unused; they belong to context sections).
 - bio-tools: clean machine sections + manifests for fastqc and multiqc; fixed the install version
   drift (single source now `0.12.1`, was `0.11.9` in the prose install.yml).
+- shared: fact-only CONTEXT section schemas (`output`, `usage`, `options`, `dependencies`, `source`)
+  and clean examples — fastqc {install,input,output,usage,options,dependencies,source,citations},
+  multiqc {input,install,citations}. Consumed by the curator; harness behavior unchanged.
 
 ### Verified
 - Deterministic suite 14 pass / 0 fail / 1 skip; both tracks still emit identical route/verdict.

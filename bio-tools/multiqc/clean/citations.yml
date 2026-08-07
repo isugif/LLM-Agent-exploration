@@ -1,0 +1,6 @@
+# CLEAN context section. Validates against schemas.py:CitationsSection.
+primary_text: "Ewels P, Magnusson M, Lundin S, Käller M. (2016). MultiQC: summarize analysis results for multiple tools and samples in a single report. Bioinformatics, 32(19):3047-3048."
+doi: "10.1093/bioinformatics/btw354"
+url: "https://multiqc.info/"
+license: "GPL-3.0-or-later"
+related: []

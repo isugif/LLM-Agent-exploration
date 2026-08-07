@@ -1,0 +1,8 @@
+# CLEAN context section. Validates against schemas.py:OutputSection.
+formats:
+  - format: html
+    note: "interactive per-module pass/warn/fail report; one per input file"
+  - format: zip
+    contains: fastqc_data.txt
+    note: "machine-readable module tables; parse for scripted QC"
+note: "One HTML + ZIP report set per input file; paired-end inputs yield one set per mate."

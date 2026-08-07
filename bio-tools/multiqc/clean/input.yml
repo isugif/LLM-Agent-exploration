@@ -1,0 +1,7 @@
+# CLEAN context section. Validates against schemas.py:InputSection.
+formats:
+  - format: report_dir
+    compression: []
+    layouts: []
+    note: "a directory MultiQC scans recursively for recognized tool outputs (e.g. *_fastqc.zip)"
+note: "Point MultiQC at a directory of upstream tool reports, not at raw reads."

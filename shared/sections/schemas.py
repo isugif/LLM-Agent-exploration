@@ -76,6 +76,73 @@ class CitationsSection(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# output
+# --------------------------------------------------------------------------- #
+
+class OutputFormat(BaseModel):
+    format: str = Field(description="output format, e.g. 'html', 'zip'")
+    contains: Optional[str] = Field(default=None, description="key file inside, e.g. 'fastqc_data.txt'")
+    note: Optional[str] = None
+
+
+class OutputSection(BaseModel):
+    formats: list[OutputFormat] = Field(description="one entry per output artifact")
+    note: Optional[str] = None
+
+
+# --------------------------------------------------------------------------- #
+# usage
+# --------------------------------------------------------------------------- #
+
+class UsageExample(BaseModel):
+    description: str = Field(description="what this example does, e.g. 'single-end reads'")
+    command: str = Field(description="a runnable command, plain text, no ``` fences or {{tokens}}")
+
+
+class UsageSection(BaseModel):
+    examples: list[UsageExample] = Field(description="representative invocations")
+    note: Optional[str] = None
+
+
+# --------------------------------------------------------------------------- #
+# options
+# --------------------------------------------------------------------------- #
+
+class Option(BaseModel):
+    flag: str = Field(description="the flag, e.g. '-o' or '--nogroup'")
+    description: str
+    default: Optional[str] = None
+
+
+class OptionsSection(BaseModel):
+    options: list[Option] = Field(description="the useful/common flags")
+
+
+# --------------------------------------------------------------------------- #
+# dependencies
+# --------------------------------------------------------------------------- #
+
+class Dependency(BaseModel):
+    name: str
+    note: Optional[str] = None
+
+
+class DependenciesSection(BaseModel):
+    required: list[Dependency] = Field(default_factory=list)
+    optional: list[Dependency] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
+# source (provenance links)
+# --------------------------------------------------------------------------- #
+
+class SourceSection(BaseModel):
+    homepage: Optional[str] = None
+    repository: Optional[str] = None
+    docs: Optional[str] = None
+
+
+# --------------------------------------------------------------------------- #
 # MACHINE sections — assembled into the runtime contract the harness consumes
 # --------------------------------------------------------------------------- #
 
@@ -157,6 +224,11 @@ SECTION_SCHEMAS: dict[str, type[BaseModel]] = {
     "install": InstallSection,
     "input": InputSection,
     "citations": CitationsSection,
+    "output": OutputSection,
+    "usage": UsageSection,
+    "options": OptionsSection,
+    "dependencies": DependenciesSection,
+    "source": SourceSection,
     # machine sections (meta/execution are objects; the list sections validate item-by-item)
     "meta": MetaSection,
     "execution": ExecutionSection,
