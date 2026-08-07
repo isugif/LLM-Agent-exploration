@@ -75,6 +75,36 @@ Loose ends left after moving the contract to clean per-section ymls (harness cut
 
 ---
 
+## Source-parity guards for curated facts (beyond flag-grounding)
+
+**Status:** 📋 scoped
+
+**What:** Prevent/catch the curator copying a FACT from a few-shot anchor instead of the source (a
+DB3 violation — e.g. fastqc's `-o` leaking into a hisat2 command). Two guards are **already built**
+in `temp/curator/`:
+- **flag-grounding** (`validators/framework.py:usage_flags_grounded / options_flags_grounded`) —
+  every flag in a generated command/option must appear in the tool's `--help`; failures drive the
+  fix-loop.
+- **anchor-generalization** (`references/generalize.py`) — mask the anchor's tool-specific facts to
+  placeholders (`<tool> <flags> <input>`) for leak-prone sections before showing it to the model.
+
+Complementary guards to add later:
+- **LLM source-parity judge** — a second-pass check that reads the generated section + the SOURCE and
+  lists any claim/flag/value not supported by source. Catches *semantic* drift the flag-grounding
+  regex can't: wrong values (`-t 999`), wrong flag semantics, invented notes. Run only after the
+  deterministic checks pass; feed failures into the fix-loop.
+- **Executable dry-run validation** — for tools that support it, confirm generated flags are actually
+  accepted (parse `--help`, or a no-op/`--dry-run` invocation). Tool-specific + side-effect risk, so
+  opt-in per tool.
+- **Keep source complete for grounding** — don't over-truncate `--help` (an earlier bug made late
+  flags look ungrounded). For very long help, chunk/summarize rather than cut, so grounding sees all
+  real flags.
+
+**Why it matters:** the anchor system is a big accuracy lever, but anchors can smuggle facts. These
+guards make the curator's "no fabrication beyond source" promise enforceable, not aspirational.
+
+---
+
 <!-- Template for new items:
 
 ## <short title>
