@@ -43,8 +43,12 @@ shared/            framework-agnostic knowledge + execution (BOTH tracks import 
 langgraph_impl/    LangGraph track: StateGraph + node functions   (+ CHANGELOG.md)
 nooa_impl/         NOOA track: Agent classes + plain orchestrator  (+ CHANGELOG.md)
 tests/             fixtures per failure mode + run_tests.py -> REPORT.md
-docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md
+docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md
 ```
+
+The **section-yml-curator** agent (an LLM-driven tool that writes the clean YAML) lives in `temp/`
+(not yet in the repo); its verified properties, token costs, and findings are logged in
+[`docs/CURATOR.md`](docs/CURATOR.md) so they don't have to be rediscovered.
 
 Guiding rule: everything tool-specific lives in `bio-tools/<tool>/`; the harnesses are
 tool-agnostic. **Adding a tool = drop `bio-tools/<tool>/contract.yml` + register a parser** (see
