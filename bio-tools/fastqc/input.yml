@@ -1,0 +1,24 @@
+intro: "[FastQC](/biotool#fastqc) expects unaligned sequencing reads in `[FASTQ](/biodata#fastq)` format (raw or trimmed)."
+inputs: "[[INPUTS]]"
+note:
+  read layout support: "`single-end`, `paired-end`"
+  compression handling: "auto-detects compressed inputs"
+warning: "FastQC supports FASTQ as well as SAM/BAM inputs; for RNA-seq read-quality interpretation, FASTQ-based pre/post-trim QC remains the primary use case."
+protip: "Use consistent sample naming across raw and trimmed inputs to simplify report comparison."
+variants:
+  SAMPLE: "[[TRIMMED_READS_SAMPLE]]"
+embeds:
+  TRIMMED_READS_SAMPLE:
+    folder: biodata
+    file: trimmed-reads-rna
+    items: sample
+    intro: "false"
+    note: "false"
+    warning: "false"
+metadata:
+  TEMPLATE_VERSION: "v1"
+  INPUTS:
+    folder: bio-tools
+    file: index
+    items: fastqc.inputs
+extra: {}

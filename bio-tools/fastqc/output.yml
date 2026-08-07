@@ -1,0 +1,58 @@
+intro: "[FastQC](/biotool#fastqc) writes one [qc-report](/biodata#qc-report) output set (`HTML` + `ZIP`) per input file."
+outputs: "[[OUTPUTS]]"
+variants:
+  SINGLE:
+    title: "Mode: single-end FastQC reports [`HTML`, `ZIP`]"
+    guide: "For one single-end FASTQ input, FastQC produces one report pair in the output directory:"
+    log: |
+      ls -1 {{DIR}}/{{WORKDIR}}
+      SRR4420293_fastqc.html  SRR4420293_fastqc.zip
+    note: |
+      *file* | *what is it?* | *practical tip*
+      `SRR4420293_fastqc.html` | interactive FastQC report | use for per-module pass/warn/fail review
+      `SRR4420293_fastqc.zip` | archive with raw module data and assets | parse `fastqc_data.txt` for scripted QC summaries
+
+  PAIRED:
+    title: "Mode: paired-end FastQC reports [`HTML`, `ZIP`]"
+    guide: "For paired-end inputs, FastQC writes one report pair per mate file:"
+    log: |
+      ls -1 {{DIR}}/{{WORKDIR}}
+      SRR4420293_1_fastqc.html  SRR4420293_1_fastqc.zip  SRR4420293_2_fastqc.html  SRR4420293_2_fastqc.zip
+    note: |
+      *file* | *what is it?* | *practical tip*
+      `*_1_fastqc.html`, `*_2_fastqc.html` | mate-specific interactive QC reports | compare mate-specific quality trends and adapter content
+      `*_1_fastqc.zip`, `*_2_fastqc.zip` | mate-specific module archives | keep alongside HTML files for reproducible audits
+
+note: "Review HTML files for interactive inspection; use ZIP contents for scripted parsing and cohort-level aggregation workflows."
+warning: "FastQC evaluates each input file independently; avoid interpreting one mate/file as representative of the full cohort."
+protip: "For cohort-scale projects, aggregate many FastQC outputs with [MultiQC](/biotool#multiqc) after per-file review."
+embeds:
+  FASTQC_REPORT_SAMPLE:
+    folder: bio-data
+    file: qc-report
+    items: sample
+    variants: FASTQC_REPORT
+    intro: "false"
+    note: "false"
+    warning: "false"
+    protip: "false"
+metadata:
+  TEMPLATE_VERSION: "v1"
+  OUTPUTS:
+    folder: bio-tools
+    file: index
+    items: fastqc.outputs
+  defaults:
+    DIR: "RNASEQ/workflow"
+    WORKDIR: "01_read_qc"
+extra:
+  SAMPLE_PREVIEW:
+    insert:
+      path: "bio-data.qc-report"
+      section: "sample"
+      variants: "FASTQC_REPORT"
+      intro: "false"
+      note: "false"
+      warning: "false"
+      protip: "false"
+      extra: "false"

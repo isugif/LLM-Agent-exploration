@@ -1,0 +1,19 @@
+# Python deps for both tracks. Install into the conda `nooa` env (which already provides nooa).
+#
+#   conda activate nooa
+#   pip install -r requirements.txt
+#
+# nooa itself is installed separately (conda env `nooa`, package `nooa==0.0.8`).
+
+# LangGraph track
+langgraph
+langchain-core
+
+# shared layer
+pyyaml
+jsonschema
+requests
+pydantic
+
+# External (not pip): FastQC 0.12.x  ->  mamba install -c bioconda fastqc
+# External: a local Ollama server + a model (default OLLAMA_MODEL=qwen2.5vl:7b)

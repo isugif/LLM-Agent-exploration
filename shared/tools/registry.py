@@ -1,0 +1,52 @@
+"""Tool registry — the one thing that stays per-tool code: the output parser.
+
+Everything else about a tool is data (its `contract.yml`): how to run it (execution.argv), its
+preconditions, boundaries, failure modes, and which metrics to score (the expectation table). But
+every tool writes its results in its own format, so turning an output directory into a metric dict
+is inherently tool-specific code.
+
+Adding a tool therefore means: drop `bio-tools/<tool>/contract.yml` (data) + write one parser and
+register it here (code). No harness changes.
+
+A parser has the signature:  parse(output_dir: str) -> dict[str, Any]
+It returns a flat dict of metric_name -> value; metrics named in the tool's expectation table are
+scored by the evaluation harness. Return {"error": "..."} if the output can't be parsed.
+"""
+
+from __future__ import annotations
+
+from typing import Callable
+
+from shared.parsers.fastqc_parse import parse_fastqc
+from shared.parsers.multiqc_parse import parse_multiqc
+from shared.probes.fastq_probe import probe as probe_fastq
+from shared.probes.report_dir_probe import probe_report_dir
+
+Fn = Callable[[str], dict]
+
+# Output parser: output_dir -> {metric: value}. One per tool (each tool emits differently).
+PARSERS: dict[str, Fn] = {
+    "fastqc": parse_fastqc,
+    "multiqc": parse_multiqc,
+}
+
+# Input probe: input_path -> measured facts. Keyed by input TYPE, shared across tools that take
+# the same input. fastqc takes a FASTQ; multiqc takes a directory of reports.
+PROBES: dict[str, Fn] = {
+    "fastqc": probe_fastq,
+    "multiqc": probe_report_dir,
+}
+
+
+def get_parser(tool_id: str) -> Fn:
+    if tool_id not in PARSERS:
+        raise KeyError(
+            f"no parser registered for tool '{tool_id}'. "
+            f"Add one in shared/tools/registry.py. Known: {sorted(PARSERS)}"
+        )
+    return PARSERS[tool_id]
+
+
+def get_probe(tool_id: str) -> Fn:
+    """Return the input probe for a tool. Defaults to the FASTQ probe."""
+    return PROBES.get(tool_id, probe_fastq)

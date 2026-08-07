@@ -1,0 +1,21 @@
+.DS_Store
+.local_zsh_history
+temp
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# test data (regenerate with shared/data/fetch_virus_fastq.sh)
+shared/data/*.fastq.gz
+shared/data/*.fastq
+
+# tool outputs (committed test fixtures under tests/inputs/ are NOT matched by these)
+*_fastqc.zip
+*_fastqc.html
+fastqc_*/
+multiqc_*/
+multiqc_report.html
+

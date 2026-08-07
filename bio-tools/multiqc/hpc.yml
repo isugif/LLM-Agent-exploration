@@ -1,0 +1,9 @@
+intro: "MultiQC is lightweight and usually run as a final post-processing step on HPC."
+note: "One short single-task job is typically enough after all upstream jobs complete."
+warning: "Launching MultiQC before upstream completion can generate partial cohort summaries on HPC."
+protip: "Run MultiQC only after pipeline completion markers to avoid partial reports."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

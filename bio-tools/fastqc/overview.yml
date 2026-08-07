@@ -1,0 +1,19 @@
+intro: "[FastQC](/biotool#fastqc) performs first-pass quality control on [raw sequencing reads](/biodata#raw-reads-rna#sample) in [FASTQ format](/biodata#fastq#format)."
+features_ref: "[[FEATURES]]"
+insights: |
+  - Produces per-base and per-sequence quality summary tables in each report.
+  - Generates GC-content and sequence-duplication metrics for each input file.
+  - Reports adapter and overrepresented-sequence signals as module-level QC results.
+  - Writes one HTML report plus one ZIP data archive per analyzed read file.
+note: "[[FEATURES]]"
+warning: "Do not use FastQC as the only QC layer for multi-sample projects; aggregate results with [MultiQC](/biotool#multiqc) for cohort-level interpretation."
+protip: "Run FastQC on both pre-trim and post-trim reads to verify quality improvement."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  FEATURES:
+    folder: bio-tools
+    file: index
+    items: fastqc.features
+extra: {}

@@ -1,0 +1,78 @@
+intro: |
+  MultiQC is typically submitted as one final SLURM job that scans completed pipeline outputs.
+note: |
+  *method* | *How it runs?* | *When to use?* | *notes*
+  **single_job** | one short job scanning a results directory | default and recommended mode | simplest and usually sufficient
+runtime:
+  title: "Runtime Benchmark"
+  note: "Benchmark summary across execution methods for this workload; CPU and walltime columns report measured runtime behavior."
+  rules: "[[HPC_LOOP_PARALLEL_ARRAY_RULES]]"
+  benchmark: |
+    *method* | *CPU_cores* | *walltime* | *real* | *user* | *sys*
+    --- | --- | --- | --- | --- | ---
+    single_job | xxx | xxx | xxx | xxx | xxx
+script:
+  title: "Batch Script"
+  guide: "Create `run_multiqc.sh` and adjust paths/resources."
+  command: |
+    ```bash
+    #!/usr/bin/env bash
+    #SBATCH --job-name=multiqc
+    #SBATCH --output=multiqc.%j.out
+    #SBATCH --error=multiqc.%j.err
+    #SBATCH --time=00:30:00
+    #SBATCH --cpus-per-task=2
+    #SBATCH --mem=8G
+
+    module load multiqc
+
+    IN="/work/project/results"
+    OUT="/work/project/qc/multiqc"
+    mkdir -p "$OUT"
+
+    # run aggregation after upstream jobs complete
+    multiqc "$IN" -o "$OUT" -n project_multiqc_report.html -f
+    ```
+submit:
+  title: "Submit a Job"
+  guide: "Submit after upstream tools finish writing logs/results."
+  command: |
+    ```bash
+    sbatch run_multiqc.sh # update script filename
+    ```
+  log: |
+    Submitted batch job 12345678
+variants:
+  SINGLE_JOB:
+    title: "Option A: Single MultiQC SLURM job"
+    guide: "Run one short SLURM job after upstream tasks complete."
+    command: |
+      ```bash
+      multiqc "$IN" -o "$OUT" -n project_multiqc_report.html -f
+      ```
+    comment: "Recommended default for most projects; one aggregation pass over finalized outputs."
+warning: "[[SLURM_RESOURCE_LIMITS_WARNING]]"
+protip: |
+  - [[SLURM_SINGLE_METHOD_PROTIP]]
+  - [[SLURM_ABSOLUTE_PATHS_PROTIP]]
+embeds:
+  HPC_LOOP_PARALLEL_ARRAY_RULES:
+    folder: notes
+    file: setup
+    items: loop-parallel-array-guidance
+  SLURM_RESOURCE_LIMITS_WARNING:
+    folder: notes
+    file: setup
+    items: slurm-resource-limits
+  SLURM_SINGLE_METHOD_PROTIP:
+    folder: notes
+    file: setup
+    items: slurm-single-method
+  SLURM_ABSOLUTE_PATHS_PROTIP:
+    folder: notes
+    file: setup
+    items: slurm-absolute-paths
+metadata:
+  TEMPLATE_VERSION: "v1"
+  defaults: {}
+extra: {}

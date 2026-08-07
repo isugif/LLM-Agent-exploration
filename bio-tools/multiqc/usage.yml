@@ -1,0 +1,51 @@
+intro: "Run MultiQC after upstream analysis tools complete to build a consolidated QC report."
+note: "A common workflow is: collect logs -> generate one HTML report -> archive parsed data files."
+warning: "Run MultiQC only after expected upstream outputs are present; otherwise important modules may be missing from the report."
+protip: |
+  - MultiQC recursively scans directories. Use `--ignore` (or `-x`) to exclude large/irrelevant paths (for example `--ignore \"tmp/*\"`).
+  - Run MultiQC at the project root when possible so it can auto-discover outputs across qc, trimming, alignment, and quantification.
+variants:
+  STEP1_RUN_REPORT:
+    title: "Step 1: Generate report"
+    variant_type: "step"
+    guide: "Scan analysis outputs and write a single MultiQC report:"
+    command: |
+      ```bash
+      # generate a consolidated MultiQC report from collected workflow outputs
+      IN="{{IN}}"
+      OUT="{{OUT}}"
+      FILENAME="{{FILENAME}}"
+      TITLE="{{TITLE}}"
+      mkdir -p "$OUT"
+
+      multiqc -o "$OUT" -n "$FILENAME" -i "$TITLE" -f "$IN"
+      ```
+    comment: |
+      - Use explicit `-o`, `-n`, and `-i` so report location, filename, and title are deterministic.
+      - Keep the run path focused (`{{IN}}`) to avoid pulling stale logs from unrelated directories.
+    log: |
+      time multiqc -o {{OUT}} -n {{FILENAME}} -i "{{TITLE}}" -f {{IN}}
+      [INFO ] multiqc : This is MultiQC v{{VERSION}}
+      [INFO ] Searching '{{IN}}' for analysis results...
+      [INFO ] Found fastqc reports
+      [INFO ] Found hisat2 logs
+      [INFO ] Found featureCounts summaries
+      [INFO ] Compressing plot data
+      [INFO ] Report : {{OUT}}/{{FILENAME}}
+      [INFO ] Data : {{OUT}}/multiqc_data
+      [INFO ] MultiQC complete
+
+      real    xxx
+      user    xxx
+      sys     xxx
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  defaults:
+    DIR: "RNASEQ/workflow"
+    WORKDIR: "qc"
+    IN: "."
+    OUT: "multiqc_report"
+    FILENAME: "multiqc_project.html"
+    TITLE: "RNA-seq QC Summary"
+extra: {}

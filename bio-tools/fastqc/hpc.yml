@@ -1,0 +1,9 @@
+intro: ""
+note: ""
+warning: "Launching FastQC before all files are staged can produce incomplete cohort coverage."
+protip: "Align thread count to allocated cores to avoid scheduler throttling on shared nodes."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

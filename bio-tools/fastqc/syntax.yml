@@ -1,0 +1,25 @@
+intro: |
+  FastQC supports mode-based execution for single-file and paired-file quality control runs.
+  FastQC command patterns: `fastqc [options] [mode-specific-inputs]`.
+note: |
+  `-t <threads>` | number of CPU threads to use  
+  `-o <outdir>` | output directory for FastQC reports  
+  `--nogroup` | disable binning to show per-base metrics at every position  
+
+warning: "Syntax examples assume file readability and write permissions in the selected output path."
+protip: "Standardize invocation style across projects so automation and audits remain predictable."
+variants:
+  SINGLE-END: |
+    ```bash
+    # runs FastQC on a single-end FASTQ file with 2 threads and writes reports to read_qc
+    fastqc -t 2 -o read_qc sample.fastq.gz
+    ```
+  PAIRED-END: |
+    ```bash
+    # runs FastQC on paired-end FASTQ files with 2 threads and writes reports to read_qc
+    fastqc -t 2 -o read_qc sample_R1.fastq.gz sample_R2.fastq.gz
+    ```
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

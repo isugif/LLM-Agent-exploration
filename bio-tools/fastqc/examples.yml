@@ -1,0 +1,60 @@
+intro: "These examples illustrate common and advanced [FastQC](/biotool#fastqc) usage patterns."
+note: ""
+pipelines:
+  P1:
+    workflow: short-read-rnaseq
+    step: read-quality-control
+    summary: Read Quality Control
+warning: "Run examples on finalized FASTQ inputs to avoid stale or partial report artifacts."
+protip: "Keep sample naming stable across runs so downstream aggregation remains deterministic."
+variants:
+  SINGLE_FILE:
+    title: "Single file QC"
+    guide: "Run FastQC on one compressed FASTQ input for baseline quality inspection."
+    command: |
+      ```bash
+      # Run FastQC on one FASTQ file
+      fastqc sample.fastq.gz
+      ```
+    comment: |
+      - `sample.fastq.gz` sets the input FASTQ file to analyze.
+      - default run emits HTML and ZIP reports in the current directory.
+  BATCH_OUTPUT_DIR:
+    title: "Batch QC with output directory"
+    guide: "Analyze multiple files and write all report artifacts to a dedicated output folder."
+    command: |
+      ```bash
+      # Run FastQC on multiple FASTQ files and write outputs to a target directory
+      fastqc -t 4 -o qc_reports *.fastq.gz
+      ```
+    comment: |
+      - `-t 4` uses four threads for concurrent file processing.
+      - `-o qc_reports` keeps report artifacts in a dedicated output folder.
+  NOGROUP_LONG_READS:
+    title: "Per-base detail (`--nogroup`)"
+    guide: "Disable positional binning to inspect long-read per-base patterns directly."
+    command: |
+      ```bash
+      # Run FastQC with full per-base detail for long reads
+      fastqc --nogroup -o qc_nogroup sample.fastq.gz
+      ```
+    comment: |
+      - `--nogroup` disables base-position binning for long-read detail.
+      - `-o qc_nogroup` isolates this run's artifacts from standard runs.
+  EXTRACT_RESULTS:
+    title: "Auto-extract report archives"
+    guide: "Generate reports and automatically unpack archives for direct file inspection."
+    command: |
+      ```bash
+      # Run FastQC and auto-extract generated report archives
+      fastqc --extract -o qc_reports sample.fastq.gz
+      ```
+    comment: |
+      - `--extract` unpacks generated archives after report creation.
+      - `-o qc_reports` writes extracted and archive outputs to one directory.
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  PIPELINE_WORKFLOW: "short-read-rnaseq"
+  PIPELINE_STEP: "read-quality-control"
+extra: {}

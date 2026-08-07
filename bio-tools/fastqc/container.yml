@@ -1,0 +1,43 @@
+intro: "Use the containerized version of the tool to simplify setup and ensure consistency."
+variants:
+  DOCKER: |
+    ```bash
+    # Docker example (local machine)
+    docker pull biocontainers/fastqc:v0.11.9_cv8
+    docker run --rm -v $(pwd):/data biocontainers/fastqc:v0.11.9_cv8 fastqc /data/sample.fastq.gz
+    ```
+  APPTAINER: |
+    ```bash
+    # Apptainer example (HPC cluster)
+    apptainer pull docker://biocontainers/fastqc:v0.11.9_cv8
+    apptainer exec fastqc_v0.11.9_cv8.sif fastqc sample.fastq.gz
+    ```
+note: "[[CONTAINER_GENERAL_NOTE]]"
+warning: "[[SCRATCH_SPACE_NOTE]]"
+protip: |
+  - [[CONTAINER_TAG_PROTIP]]
+  - [[CONTAINER_PREFERENCE]]
+embeds:
+  CONTAINER_GENERAL_NOTE:
+    folder: notes
+    file: setup
+    items: container-use
+  SCRATCH_SPACE_NOTE:
+    folder: notes
+    file: setup
+    items: container-scratch-space
+  CONTAINER_TAG_PROTIP:
+    folder: notes
+    file: setup
+    items: container-image-tag
+  CONTAINER_PREFERENCE:
+    folder: notes
+    file: setup
+    items: container-preference
+  CONTAINER_PREFERENCE:
+    folder: notes
+    file: setup
+    items: container-preference
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

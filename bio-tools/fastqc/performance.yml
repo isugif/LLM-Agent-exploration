@@ -1,0 +1,17 @@
+intro: "[FastQC](/biotool#fastqc) is typically fast and low-memory for short-read QC workloads."
+note: "Typical runtime examples from the original benchmark style: ~30 seconds for smaller inputs (4 threads) and ~5 minutes for larger inputs (8 threads)."
+warning: "Launching too many concurrent jobs on shared storage can degrade throughput and increase walltime variance."
+protip: |
+  - Parallelize across files/samples rather than over-threading one file.
+  - Tune concurrency to match filesystem bandwidth and scheduler limits.
+  - Keep temporary and output paths on performant storage for large cohorts.
+variants:
+  cpu: "multi-threaded with `-t`; scales well for file-level parallel execution."
+  memory: "~1-4 GB RAM per process for typical short-read FASTQ QC workloads (often ~1 GB small inputs, ~2-3 GB larger inputs)."
+  parallelization: "combine moderate per-process threading with cohort-level batching/arrays."
+  gpu_support: "not available (no native GPU support)."
+  hpc_usage: "ideal for batch/array processing, especially one-sample-per-task patterns on shared clusters."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

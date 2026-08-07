@@ -1,0 +1,15 @@
+intro: "Use these references to understand [FastQC](/biotool#fastqc) metrics, command options, and release-specific behavior."
+note: |
+  - **Official homepage:** [FastQC project page](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
+  - **Source repository:** [s-andrews/FastQC on GitHub](https://github.com/s-andrews/FastQC)
+  - **Primary manual:** [FastQC User Guide](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/)
+  - **FAQ / troubleshooting:** [FastQC FAQs](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/#abouthtml)
+  - **Version history:** [FastQC Releases](https://github.com/s-andrews/FastQC/releases)
+warning: "Third-party guides may lag current FastQC behavior; prioritize official documentation first."
+protip: |
+  Check the release notes for your installed version before interpreting edge-case behavior (for example gzip detection, memory handling, or duplicate metrics defaults).
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

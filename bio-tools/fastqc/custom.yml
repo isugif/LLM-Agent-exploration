@@ -1,0 +1,9 @@
+intro: ""
+note: ""
+warning: "Use this section only when project-specific behavior is required beyond standard contracts."
+protip: "Prefer canonical sections for stable guidance and keep custom overrides minimal."
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

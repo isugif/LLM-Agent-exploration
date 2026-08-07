@@ -1,0 +1,20 @@
+intro: "Use official multiqc resources for source code and documentation."
+note: ""
+warning: "Use only official project links to avoid stale mirrors or fork-specific behavior."
+protip: "Pin documentation references to the same release family used in your environment."
+variants:
+  LINKS: |
+    - [GitHub Repository]([[TOOL_SOURCE]])
+    - [Project Homepage]([[TOOL_HOMEPAGE]])
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  TOOL_SOURCE:
+    folder: bio-tools
+    file: index
+    items: multiqc.source
+  TOOL_HOMEPAGE:
+    folder: bio-tools
+    file: index
+    items: multiqc.homepage
+extra: {}

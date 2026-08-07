@@ -1,0 +1,24 @@
+intro: "Install required runtime dependencies first, then add optional helpers based on project scale and reporting needs."
+required:
+  JAVA:
+    item: "[Java Runtime Environment (JRE)](https://adoptium.net/)"
+    note: ">=8 runtime required by FastQC"
+optional:
+  MULTIQC:
+    item: "[MultiQC]([[MULTIQC_SOURCE]])"
+    note: "for aggregated multi-sample QC reporting"
+note: "<i class='footnote'>Installation methods and environment-specific options are listed in the [installation](/biotool#fastqc#install) section.</i>"
+warning: "Java runtime mismatches can prevent FastQC launch or alter behavior across nodes."
+protip: |
+  - Ensure java -version returns a valid Java installation before running FastQC.
+  - For memory-intensive jobs, increase heap size: export _JAVA_OPTIONS="-Xmx2G"
+  - For cohort-level summaries, run [MultiQC](/biotool#multiqc) after all FastQC reports are generated.
+variants: {}
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+  MULTIQC_SOURCE:
+    folder: bio-tools
+    file: index
+    items: multiqc.source
+extra: {}

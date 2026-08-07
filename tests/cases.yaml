@@ -1,0 +1,69 @@
+# Declarative test cases for the four-harness pipeline. Run with: python tests/run_tests.py
+#
+# Two case types:
+#   pipeline  (default) — run the full pipeline through BOTH tracks and check route/verdict.
+#   crash               — feed a synthetic failed run to the diagnosis harness and check the fix.
+#
+# Expected values may be a scalar or a list (list = "any of these is acceptable").
+# Flags: requires_llm (skipped in deterministic mode), requires_tool (skipped if tool absent),
+#        build_multiqc_input (generate a FastQC output dir at runtime and use it as --fastq).
+
+cases:
+  - name: happy_fastqc
+    type: pipeline
+    tool: fastqc
+    fastq: tests/inputs/good.fastq.gz
+    question: "QC these Illumina RNA-seq reads before trimming"
+    expect: { route: run, run_ok: true, verdict: [ok, anomaly] }
+
+  - name: refuse_not_fastq
+    type: pipeline
+    tool: fastqc
+    fastq: tests/inputs/not_fastq.txt.gz
+    question: "QC these reads"
+    expect: { route: refuse }
+
+  - name: refuse_empty
+    type: pipeline
+    tool: fastqc
+    fastq: tests/inputs/empty.fastq.gz
+    question: "QC these reads"
+    expect: { route: refuse }
+
+  - name: anomaly_badqual
+    type: pipeline
+    tool: fastqc
+    fastq: tests/inputs/badqual.fastq.gz
+    question: "QC these reads"
+    expect: { route: run, run_ok: true, verdict: anomaly }
+
+  - name: refuse_cohort_boundary
+    type: pipeline
+    tool: fastqc
+    fastq: tests/inputs/good.fastq.gz
+    question: "assess these reads"
+    deliverable: "give me the overall cohort quality conclusion across all samples in the project"
+    requires_llm: true                       # boundary confirmation needs the LLM
+    expect: { route: refuse }
+
+  - name: multiqc_happy
+    type: pipeline
+    tool: multiqc
+    build_multiqc_input: true                # run fastqc on good.fastq.gz -> use that dir as input
+    question: "aggregate the FastQC reports for this run"
+    requires_tool: multiqc
+    expect: { route: run, run_ok: true, verdict: [ok, anomaly] }
+
+  - name: diagnosis_oom
+    type: crash
+    tool: fastqc
+    stderr: "java.lang.OutOfMemoryError: Java heap space"
+    exit_code: 1
+    expect: { status: failure, has_fix: true, escalate: false }
+
+  - name: diagnosis_novel_escalates
+    type: crash
+    tool: fastqc
+    stderr: "Segmentation fault (core dumped)"
+    exit_code: 139
+    expect: { status: failure, has_fix: false, escalate: true }

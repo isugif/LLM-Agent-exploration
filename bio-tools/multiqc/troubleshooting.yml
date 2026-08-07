@@ -1,0 +1,18 @@
+intro: "Common MultiQC issues and practical fixes."
+note: ""
+warning: "Most MultiQC failures come from missing or non-standard upstream files, not the MultiQC binary itself."
+protip: "Re-run with verbose logging and a narrowed input directory to isolate module-detection issues quickly."
+variants:
+  NO_MODULES:
+    issue: "Report is missing expected tool sections"
+    fix: "Confirm upstream logs are present and module names are not excluded by module filters or config settings."
+  DUPLICATE_SAMPLES:
+    issue: "Sample names collide across directories"
+    fix: "Use directory-aware sample naming or config-based renaming to disambiguate samples."
+  OVERWRITE_BLOCKED:
+    issue: "Output already exists and command stops"
+    fix: "Overwrite existing outputs only when intentional, or write to a new report target."
+embeds: {}
+metadata:
+  TEMPLATE_VERSION: "v1"
+extra: {}

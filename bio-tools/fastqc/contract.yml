@@ -1,0 +1,100 @@
+# Enforceable contract for FastQC — validates against
+# ../../shared/contracts/schema/contract.schema.json
+#
+# This is the machine-checkable layer that sits alongside the human-facing workbook ymls in this
+# same folder (install.yml, hpc.yml, usage.yml, troubleshooting.yml, ...). The harness reads THIS
+# file; the workbook files stay as prose context.
+id: fastqc
+kind: tool
+version: "0.12.1"
+summary: >
+  First-pass quality control on raw/trimmed sequencing reads in FASTQ format.
+  Produces per-file HTML + ZIP reports of per-base quality, GC content,
+  duplication, adapter and overrepresented-sequence signals.
+
+interface:
+  inputs:
+    - format: fastq
+      compression: [none, gzip]
+      layout: [SE, PE]        # each mate file is evaluated independently
+    - format: bam             # supported, but off-label for read-QC interpretation (see must_not_use)
+      note: "SAM/BAM input mode exists; FASTQ pre/post-trim QC is the primary use case."
+  outputs:
+    - format: html
+      note: "interactive per-module pass/warn/fail report"
+    - format: zip
+      contains: fastqc_data.txt
+      note: "machine-readable module tables; parse this for scripted QC"
+
+# --- how to run it (generic runner renders this; list form => no shell, no injection) ---
+execution:
+  argv: [fastqc, -t, "{threads}", -o, "{out_dir}", "{input}"]
+  version_argv: [fastqc, --version]
+  install_hint: "mamba install -c bioconda fastqc"
+
+# --- assertable preconditions (checked against declared.* / measured.* facts) ---
+preconditions:
+  - id: input_is_fastq
+    assert: "measured.format == 'fastq'"
+    severity: block
+    message: "FastQC read-QC contract expects FASTQ input; got a different format."
+  - id: reads_present
+    assert: "measured.n_reads_sampled > 0"
+    severity: block
+    message: "No reads found in the input file; nothing to QC."
+  - id: encoding_resolvable
+    assert: "measured.encoding_guess != 'unknown'"
+    severity: warn
+    message: "Could not confidently infer quality encoding from the sampled reads."
+
+# --- validated operating range (advisory bounds) ---
+operating_range:
+  read_length:
+    min: 20
+    max: 1000
+    unit: bp
+    note: "Very long reads render some plots slowly; extremely short reads make per-base plots uninformative."
+  n_reads:
+    recommended_min: 1000
+    note: "Below ~1000 reads, module statistics are noisy and pass/warn/fail flags are unreliable."
+
+# --- MUST-NOT-USE boundaries (the key gap; judgment checks the DELIVERABLE against these) ---
+must_not_use:
+  - id: not_cohort_qc
+    boundary: >
+      Not a cohort/aggregate QC tool. Do not treat one file's report as representative of a
+      multi-sample project or draw cohort-level conclusions from it — aggregate with MultiQC.
+    keywords: [cohort, aggregate, all samples, across samples, project-level, batch, overall quality]
+  - id: not_a_trimmer
+    boundary: >
+      Not a read trimmer or corrector. FastQC emits reports only, never cleaned reads;
+      do not treat it as a preprocessing/trimming step that produces usable FASTQ.
+    keywords: [trim, trimmed reads, cleaned reads, adapter removal, filter reads, preprocess reads]
+  - id: flags_not_contamination_calls
+    boundary: >
+      Adapter / overrepresented-sequence flags are signals, not contamination or species calls.
+      Do not conclude contamination or taxonomic identity from FastQC modules alone.
+    keywords: [contamination, contaminant, species id, taxonomy, what organism, identify organism]
+
+# --- known hard failures (diagnosis harness greps stderr/stdout for `signal`) ---
+failure_modes:
+  - id: java_oom
+    signal: "OutOfMemoryError"
+    fix: "Increase the JVM heap, e.g. `export _JAVA_OPTIONS=\"-Xmx4G\"`, then rerun."
+  - id: malformed_fastq
+    signal: "Failed to process"
+    fix: "Input FASTQ is malformed/truncated. Validate integrity (record count multiple of 4, matching seq/qual lengths) before rerun."
+  - id: empty_or_unreadable
+    signal: "Skipping"
+    fix: "Input file is empty or unreadable. Confirm the path, permissions, and that the file is non-empty."
+  - id: not_a_fastq
+    signal: "didn't look like FASTQ"
+    fix: "File does not parse as FASTQ. Check that it is actually FASTQ (or FASTQ.gz), not FASTA/other."
+
+gotchas:
+  - "Adapter/overrepresented flags may reflect biologically real motifs (e.g. rRNA in RNA-seq); interpret in experiment context."
+  - "High sequence duplication is often normal and expected for RNA-seq; a duplication WARN/FAIL is not automatically a problem."
+  - "FastQC evaluates each file independently — a PE dataset yields separate reports per mate; do not read one mate as the pair."
+  - "Version-scoped: thresholds and module set here are for 0.12.x; older 0.11.x differs (e.g. added modules, per-tile quality)."
+
+expectations_ref: rnaseq_qc.yaml
