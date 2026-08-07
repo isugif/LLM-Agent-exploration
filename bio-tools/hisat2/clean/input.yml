@@ -1,0 +1,11 @@
+# CLEAN context section. Validates against schemas.py:InputSection.
+formats:
+  - format: fastq
+    compression: [gzip, none]
+    layouts: [SE, PE]
+    note: "reads to align (-1/-2 for paired, -U for single)"
+  - format: fasta
+    compression: [gzip, none]
+    layouts: [SE, PE]
+    note: "reads may also be FASTA (-f)"
+note: "Also requires a prebuilt HISAT2 index passed with -x (built with hisat2-build)."

@@ -1,0 +1,11 @@
+# CLEAN context section. Validates against schemas.py:InstallSection.
+version: "2.2.3"
+methods:
+  - manager: mamba
+    command: "mamba install -c bioconda hisat2=2.2.3"
+  - manager: conda
+    command: "conda install -c bioconda hisat2=2.2.3"
+verify_command: "hisat2 --version"
+verify_expected: "version 2.2.3"
+notes:
+  - "Prebuilt HISAT2 indexes for common genomes are available from the project homepage."
