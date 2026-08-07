@@ -1,0 +1,13 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Precondition.
+- id: input_is_fastq
+  assert: "measured.format == 'fastq'"
+  severity: block
+  message: "FastQC read-QC contract expects FASTQ input; got a different format."
+- id: reads_present
+  assert: "measured.n_reads_sampled > 0"
+  severity: block
+  message: "No reads found in the input file; nothing to QC."
+- id: encoding_resolvable
+  assert: "measured.encoding_guess != 'unknown'"
+  severity: warn
+  message: "Could not confidently infer quality encoding from the sampled reads."

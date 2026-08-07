@@ -2,10 +2,15 @@
 
 This is the enforcement engine both tracks share. It does four things:
 
-  1. load_contract / validate_contract  -> read a contract yaml + check it against the JSON Schema.
+  1. load_contract / validate_contract  -> ASSEMBLE the runtime contract from a tool's clean machine
+     sections (per bio-tools/<tool>/manifest.yml) + validate each section against its pydantic schema.
   2. evaluate_preconditions             -> run each `assert` against declared/measured facts.
   3. match_boundaries                    -> cheap keyword pre-filter of must_not_use vs a deliverable.
   4. score_metric / load_expectations    -> tier a measured metric against the expected-range table.
+
+The contract is no longer a single `contract.yml`; it is assembled from the `machine: true` sections
+listed in the tool's manifest (execution, preconditions, must_not_use, failure_modes, meta). Those
+clean per-section ymls are the single source of truth; the harness sees the same dict shape as before.
 
 The `assert` strings are evaluated with a *restricted* AST walker (see safe_eval), NOT python
 `eval`. Only comparisons, boolean ops, literals and attribute access on the fact namespaces
@@ -36,21 +41,63 @@ EXPECTATIONS_ROOT = CONTRACTS_ROOT / "expectations"
 # Loading & schema validation
 # --------------------------------------------------------------------------- #
 
-def load_contract(tool_id: str) -> dict[str, Any]:
-    path = TOOLS_ROOT / tool_id / "contract.yml"
-    with open(path) as fh:
+def load_manifest(tool_id: str) -> dict[str, Any]:
+    with open(TOOLS_ROOT / tool_id / "manifest.yml") as fh:
         return yaml.safe_load(fh)
 
 
+def load_section(tool_id: str, rel_path: str) -> Any:
+    """Load one raw section yml (relative to the tool folder). Used for situational loading too —
+    e.g. open the `install` section only on an install error."""
+    with open(TOOLS_ROOT / tool_id / rel_path) as fh:
+        return yaml.safe_load(fh)
+
+
+def section_path(tool_id: str, section_name: str) -> str | None:
+    """Return the manifest path for a named section (any section, machine or context), or None."""
+    for ref in load_manifest(tool_id).get("sections", []):
+        if ref["name"] == section_name:
+            return ref["path"]
+    return None
+
+
+def load_contract(tool_id: str) -> dict[str, Any]:
+    """Assemble the runtime contract dict from the tool's `machine: true` sections.
+
+    Produces the same keys the harness already consumes: id, version, summary, expectations_ref,
+    execution, preconditions, must_not_use, failure_modes. `meta` merges (summary, expectations_ref);
+    the other machine sections map to a same-named key.
+    """
+    manifest = load_manifest(tool_id)
+    contract: dict[str, Any] = {"id": manifest["tool"], "version": manifest.get("version")}
+    for ref in manifest.get("sections", []):
+        if not ref.get("machine"):
+            continue
+        data = load_section(tool_id, ref["path"])
+        name = ref["name"]
+        if name == "meta":
+            contract.update(data or {})          # summary, expectations_ref
+        else:
+            contract[name] = data                 # execution / preconditions / must_not_use / failure_modes
+    return contract
+
+
 def validate_contract(contract: dict[str, Any]) -> None:
-    """Raise jsonschema.ValidationError if the contract is malformed."""
-    import json
+    """Validate the assembled contract's machine sections against their pydantic schemas.
 
-    import jsonschema
+    Replaces the old JSON-schema check on a monolithic contract.yml. Raises pydantic ValidationError
+    (or ValueError for a missing required key) if any section is malformed.
+    """
+    from shared.sections.schemas import (
+        ExecutionSection, LIST_SECTION_ITEM, MetaSection,
+    )
 
-    with open(SCHEMA_PATH) as fh:
-        schema = json.load(fh)
-    jsonschema.validate(contract, schema)
+    MetaSection.model_validate({"summary": contract.get("summary", ""),
+                                "expectations_ref": contract.get("expectations_ref")})
+    ExecutionSection.model_validate(contract.get("execution") or {})
+    for key, item_model in LIST_SECTION_ITEM.items():
+        for item in contract.get(key, []):
+            item_model.model_validate(item)
 
 
 def load_expectations(contract: dict[str, Any]) -> dict[str, Any]:

@@ -1,0 +1,11 @@
+# CLEAN LLM-readable source (fact-only). Validates against shared/sections/schemas.py:InputSection.
+formats:
+  - format: fastq
+    compression: [gzip, none]
+    layouts: [SE, PE]
+    note: "each mate file is evaluated independently"
+  - format: bam
+    compression: []
+    layouts: []
+    note: "SAM/BAM input mode exists; FASTQ pre/post-trim QC is the primary use case"
+note: "Unaligned sequencing reads in FASTQ format, raw or trimmed."

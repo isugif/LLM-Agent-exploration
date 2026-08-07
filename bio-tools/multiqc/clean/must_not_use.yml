@@ -1,0 +1,12 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Boundary.
+- id: not_a_measurement_tool
+  boundary: >
+    Not a measurement tool. MultiQC only re-presents numbers already computed by other tools;
+    it does not measure read quality, alignment, or duplication itself. To MEASURE, run the
+    underlying tool (e.g. FastQC) — MultiQC only aggregates.
+  keywords: [measure, compute quality, run qc on reads, from raw reads, calculate, quantify]
+- id: not_a_decision_maker
+  boundary: >
+    Not a pass/fail decision-maker or data fixer. MultiQC displays aggregated metrics; it does
+    not decide sample inclusion/exclusion or modify/clean any data.
+  keywords: [decide, pass or fail, exclude samples, drop samples, fix, clean, filter samples]

@@ -1,0 +1,13 @@
+# CLEAN machine section (list). Each item validates against schemas.py:FailureMode.
+- id: java_oom
+  signal: "OutOfMemoryError"
+  fix: "Increase the JVM heap, e.g. `export _JAVA_OPTIONS=\"-Xmx4G\"`, then rerun."
+- id: malformed_fastq
+  signal: "Failed to process"
+  fix: "Input FASTQ is malformed/truncated. Validate integrity (record count multiple of 4, matching seq/qual lengths) before rerun."
+- id: empty_or_unreadable
+  signal: "Skipping"
+  fix: "Input file is empty or unreadable. Confirm the path, permissions, and that the file is non-empty."
+- id: not_a_fastq
+  signal: "didn't look like FASTQ"
+  fix: "File does not parse as FASTQ. Check that it is actually FASTQ (or FASTQ.gz), not FASTA/other."

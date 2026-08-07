@@ -1,0 +1,11 @@
+# Per-tool index. Validates against shared/sections/schemas.py:Manifest.
+# Context sections (input/install/citations) for MultiQC are added in M3.3; the machine sections
+# below are what the harness assembles into the contract.
+tool: multiqc
+version: "1.35"
+sections:
+  - {name: meta,          purpose: "summary + expectations link",   load_when: always, machine: true, path: clean/meta.yml}
+  - {name: execution,     purpose: "how to run + install hint",      load_when: always, machine: true, path: clean/execution.yml}
+  - {name: preconditions, purpose: "assertable input preconditions", load_when: always, machine: true, path: clean/preconditions.yml}
+  - {name: must_not_use,  purpose: "off-label boundaries",           load_when: always, machine: true, path: clean/must_not_use.yml}
+  - {name: failure_modes, purpose: "crash signals + fixes",          load_when: always, machine: true, path: clean/failure_modes.yml}

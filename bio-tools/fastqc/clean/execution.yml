@@ -1,0 +1,4 @@
+# CLEAN machine section. Validates against schemas.py:ExecutionSection. Drives shared/execution/runner.py.
+argv: [fastqc, -t, "{threads}", -o, "{out_dir}", "{input}"]
+version_argv: [fastqc, --version]
+install_hint: "mamba install -c bioconda fastqc"

@@ -6,6 +6,32 @@ changelog so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.3.0] — 2026-08-07
+
+Shared-layer change (YAML structure); no track-specific code changed — the assembled contract keeps
+the same shape both tracks already consumed, so all four harnesses and LangGraph↔NOOA parity are
+unchanged.
+
+### Changed
+- shared: the contract moved from a monolithic `bio-tools/<tool>/contract.yml` to clean per-section
+  ymls under `bio-tools/<tool>/clean/` + a per-tool `manifest.yml`. `contracts_lib.load_contract`
+  now ASSEMBLES the runtime contract from the `machine: true` sections (meta, execution,
+  preconditions, must_not_use, failure_modes). `contract.yml` deleted for fastqc + multiqc.
+- shared: `validate_contract` validates each machine section against pydantic schemas
+  (`shared/sections/schemas.py`) instead of the old JSON schema.
+
+### Added
+- shared: `shared/sections/schemas.py` — fact-only, LLM-readable pydantic section schemas (no Jekyll
+  render tokens) + `Manifest`.
+- shared: situational loading — `load_manifest` / `section_path` / `load_section` open one section on
+  demand (e.g. `install.yml` only on an install error). Dedup: `interface`/`gotchas`/`operating_range`
+  dropped from the machine contract (unused; they belong to context sections).
+- bio-tools: clean machine sections + manifests for fastqc and multiqc; fixed the install version
+  drift (single source now `0.12.1`, was `0.11.9` in the prose install.yml).
+
+### Verified
+- Deterministic suite 14 pass / 0 fail / 1 skip; both tracks still emit identical route/verdict.
+
 ## [0.2.0] — 2026-08-06
 
 ### Changed

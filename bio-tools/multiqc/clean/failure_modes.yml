@@ -1,0 +1,7 @@
+# CLEAN machine section (list). Each item validates against schemas.py:FailureMode.
+- id: no_reports_found
+  signal: "No analysis results found"
+  fix: "Point MultiQC at a directory that actually contains recognized tool outputs (e.g. FastQC *_fastqc.zip files)."
+- id: not_installed
+  signal: "command not found"
+  fix: "Install MultiQC: `pip install multiqc`."

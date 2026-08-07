@@ -1,0 +1,14 @@
+# CLEAN LLM-readable source (fact-only). Validates against shared/sections/schemas.py:InstallSection.
+# The Jekyll workbook install.yml is RENDERED from this, not hand-maintained alongside it.
+version: "0.12.1"
+methods:
+  - manager: mamba
+    command: "mamba install -c bioconda fastqc=0.12.1"
+  - manager: conda
+    command: "conda install -c bioconda fastqc=0.12.1"
+  - manager: brew
+    command: "brew install fastqc"
+verify_command: "fastqc --version"
+verify_expected: "FastQC v0.12.1"
+notes:
+  - "Pin the version across cohort runs to keep module outputs and report formatting consistent."

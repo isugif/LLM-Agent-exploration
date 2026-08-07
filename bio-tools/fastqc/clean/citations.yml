@@ -1,0 +1,6 @@
+# CLEAN LLM-readable source (fact-only). Validates against shared/sections/schemas.py:CitationsSection.
+primary_text: "Andrews S. (2010). FastQC: A Quality Control Tool for High Throughput Sequence Data."
+doi: null
+url: "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/"
+license: "GPL-3.0-or-later"
+related: []
