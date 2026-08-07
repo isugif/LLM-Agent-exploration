@@ -48,12 +48,9 @@ class EvaluationAgent(Agent):
     def verdict(self, metrics: dict, scored: dict, findings: list, explanation: str | None) -> Verdict:
         if "error" in metrics:
             return Verdict(status="cannot_assess", findings=[metrics["error"]], escalate=True)
-        f = list(findings)
-        if explanation:
-            f.append(f"explanation: {explanation}")
         return Verdict(status="ok" if not findings else "anomaly",
-                       findings=f or ["all scored metrics within expected ranges"],
-                       metrics=scored, escalate=False)
+                       findings=findings or ["all scored metrics within expected ranges"],
+                       explanation=explanation, metrics=scored, escalate=False)
 
     # --- agentic (LLM-driven) method ---
     @strategy(PredictStrategy())

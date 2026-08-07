@@ -41,7 +41,7 @@ A tool is **data + two small functions**, no harness changes:
 
 - **Data:** `bio-tools/<tool>/contract.yml` — the enforceable contract, living in the same folder as
   the tool's human-facing workbook ymls (single source of truth per tool).
-- **Code:** a parser (`shared/qc/<tool>_parse.py`) and — only for a new input type — a probe
+- **Code:** a parser (`shared/parsers/<tool>_parse.py`) and — only for a new input type — a probe
   (`shared/probes/<type>_probe.py`), both registered in `shared/tools/registry.py`.
 
 Everything else is tool-agnostic: the contract's `execution.argv` drives a generic runner

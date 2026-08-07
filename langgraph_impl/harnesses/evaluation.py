@@ -53,12 +53,11 @@ def evaluation_node(state: dict) -> dict:
                    "and note when a flag (e.g. RNA-seq duplication) may be biologically normal.",
             prompt=f"Organism/assay context: {state['spec']['declared']}\nFlagged: {findings}",
         )
-    if explanation:
-        findings.append(f"explanation: {explanation}")
 
     return {"verdict": Verdict(
         status=status,
         findings=findings or ["all scored metrics within expected ranges"],
+        explanation=explanation,
         metrics=scored,
         escalate=False,
     ).to_dict()}

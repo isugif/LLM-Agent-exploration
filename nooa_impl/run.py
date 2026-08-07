@@ -10,6 +10,7 @@ import asyncio
 import json
 
 from nooa_impl.orchestrator import run_pipeline
+from shared.report import write_outputs
 
 
 def main() -> None:
@@ -24,6 +25,9 @@ def main() -> None:
     report = asyncio.run(run_pipeline(args.fastq, args.question, args.deliverable,
                                       args.out_dir, tool_id=args.tool))
     print(json.dumps(report, indent=2))
+    out_dir = report.get("out_dir") or args.out_dir
+    if out_dir:
+        write_outputs(report, out_dir)
 
 
 if __name__ == "__main__":

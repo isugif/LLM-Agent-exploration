@@ -12,6 +12,7 @@ import argparse
 import json
 
 from langgraph_impl.graph import build_graph
+from shared.report import write_outputs
 
 
 def main() -> None:
@@ -42,6 +43,10 @@ def main() -> None:
         "verdict": final.get("verdict"),
     }
     print(json.dumps(report, indent=2))
+    # persist report.json + report_summary.md into the output dir (the run's own dir)
+    out_dir = final.get("out_dir") or args.out_dir
+    if out_dir:
+        write_outputs(report, out_dir)
 
 
 def _trim_run(rr):

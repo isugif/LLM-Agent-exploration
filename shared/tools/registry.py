@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from typing import Callable
 
-from shared.qc.fastqc_parse import parse_fastqc
-from shared.qc.multiqc_parse import parse_multiqc
+from shared.parsers.fastqc_parse import parse_fastqc
+from shared.parsers.multiqc_parse import parse_multiqc
 from shared.probes.fastq_probe import probe as probe_fastq
 from shared.probes.report_dir_probe import probe_report_dir
 

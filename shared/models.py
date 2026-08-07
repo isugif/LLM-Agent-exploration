@@ -84,6 +84,7 @@ class Verdict:
     findings: list[str] = field(default_factory=list)
     escalate: bool = False                 # send to human curation?
     proposed_fix: Optional[str] = None     # for diagnosed crashes
+    explanation: Optional[str] = None      # LLM plain-language explanation of flagged metrics
     metrics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

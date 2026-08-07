@@ -25,7 +25,7 @@ already tool-agnostic and picks the tool up from `--tool <id>`.
    - `operating_range`, `gotchas`, and `expectations_ref` (an assay table under
      `shared/contracts/expectations/`).
 
-2. **Parser** in `shared/qc/<tool>_parse.py` — `parse(output_dir) -> {metric: value}`. Emit the
+2. **Parser** in `shared/parsers/<tool>_parse.py` — `parse(output_dir) -> {metric: value}`. Emit the
    metric names your `expectations_ref` table scores (metrics not in the table are ignored; missing
    metrics are simply not scored). Register it in `shared/tools/registry.py:PARSERS`.
 
@@ -49,7 +49,7 @@ MultiQC aggregates a *directory* of other tools' reports, so it needed the new-i
 - `bio-tools/multiqc/contract.yml` — `execution.argv: [multiqc, "{input}", -o, "{out_dir}", -f]`;
   preconditions assert `measured.format == 'report_dir'` and `measured.n_reports > 0`; boundaries say
   it is not a measurement tool and not a decision-maker.
-- `shared/qc/multiqc_parse.py:parse_multiqc` — reads `multiqc_data/multiqc_general_stats.txt`,
+- `shared/parsers/multiqc_parse.py:parse_multiqc` — reads `multiqc_data/multiqc_general_stats.txt`,
   averages metrics across samples, renames to the shared assay-table metric names.
 - `shared/probes/report_dir_probe.py:probe_report_dir` — counts recognized reports in the directory.
 - Both registered in `shared/tools/registry.py`.

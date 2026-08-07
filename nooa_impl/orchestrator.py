@@ -70,6 +70,7 @@ async def run_pipeline(fastq: str, question: str, deliverable: str | None = None
 
     # --- 3. Execution --------------------------------------------------------
     out_dir = out_dir or tempfile.mkdtemp(prefix=f"{tool_id}_")
+    report["out_dir"] = out_dir
     run_result = run_tool(cl.load_contract(tool_id), fastq, out_dir)
     report["run_result"] = {k: v for k, v in run_result.to_dict().items()
                             if k not in ("stdout", "stderr")}
