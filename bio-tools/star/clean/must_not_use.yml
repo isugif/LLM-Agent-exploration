@@ -1,0 +1,10 @@
+# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
+# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
+# │ placeholder with expert-reviewed content and delete the markers. Until then │
+# │ the harness REFUSES to route this tool.                                     │
+# └────────────────────────────────────────────────────────────────────────────┘
+- id: HRR_boundary_1
+  boundary: HRR_an off-label use that would produce a silently-wrong result (expert
+    judgment)
+  keywords:
+  - HRR_keyword

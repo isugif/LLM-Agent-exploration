@@ -11,6 +11,21 @@ A tool is **data + two small functions**. You do not touch the harnesses or eith
 Everything else — routing, refusal, diagnosis, evaluation, both the LangGraph and NOOA tracks — is
 already tool-agnostic and picks the tool up from `--tool <id>`.
 
+## Fastest start — auto-curate the fact sections
+
+The **curator** provisions the tool (bioconda) and writes the CONTEXT (fact) sections + a manifest,
+then scaffolds the enforceable MACHINE sections as `HRR_` placeholders for you to fill:
+
+```bash
+python -m curator.run --tool star                       # installs `star`, auto-resolves binary STAR
+python -m curator.run --tool star --url <repo> --full   # add a doc source; curate all fact sections
+```
+
+It handles package/binary name mismatches automatically (bioconda `star` → binary `STAR`); override
+with `--binary`. Output lands in `bio-tools/<tool>/` (`manifest.yml`, `clean/*.yml`). The harness
+**refuses to route the tool** until you replace the `HRR_` markers in
+`clean/{preconditions,must_not_use,failure_modes,meta,execution}.yml`, then add the parser below.
+
 ## Checklist
 
 1. **`bio-tools/<tool>/contract.yml`** — fill every section (validated against
