@@ -1,0 +1,9 @@
+# CLEAN context section (curator-generated). Validates against schemas.py.
+options:
+- flag: --genomeDir
+  description: path to the directory where genome files are stored (for --runMode
+    alignReads) or will be generated (for --runMode generateGenome)
+  default: null
+- flag: --readFilesIn
+  description: comma-separated list of input FASTQ file names
+  default: null
