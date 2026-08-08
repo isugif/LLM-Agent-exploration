@@ -1,0 +1,4 @@
+# CLEAN machine section. Validates against schemas.py:ExecutionSection.
+argv: [multiqc, "{input}", -o, "{out_dir}", -f]
+version_argv: [multiqc, --version]
+install_hint: "pip install multiqc  # or: mamba install -c bioconda multiqc"

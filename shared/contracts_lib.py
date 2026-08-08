@@ -2,10 +2,15 @@
 
 This is the enforcement engine both tracks share. It does four things:
 
-  1. load_contract / validate_contract  -> read a contract yaml + check it against the JSON Schema.
+  1. load_contract / validate_contract  -> ASSEMBLE the runtime contract from a tool's clean machine
+     sections (per bio-tools/<tool>/manifest.yml) + validate each section against its pydantic schema.
   2. evaluate_preconditions             -> run each `assert` against declared/measured facts.
   3. match_boundaries                    -> cheap keyword pre-filter of must_not_use vs a deliverable.
   4. score_metric / load_expectations    -> tier a measured metric against the expected-range table.
+
+The contract is no longer a single `contract.yml`; it is assembled from the `machine: true` sections
+listed in the tool's manifest (execution, preconditions, must_not_use, failure_modes, meta). Those
+clean per-section ymls are the single source of truth; the harness sees the same dict shape as before.
 
 The `assert` strings are evaluated with a *restricted* AST walker (see safe_eval), NOT python
 `eval`. Only comparisons, boolean ops, literals and attribute access on the fact namespaces
@@ -30,27 +35,127 @@ TOOLS_ROOT = REPO_ROOT / "bio-tools"
 CONTRACTS_ROOT = Path(__file__).parent / "contracts"
 SCHEMA_PATH = CONTRACTS_ROOT / "schema" / "contract.schema.json"
 EXPECTATIONS_ROOT = CONTRACTS_ROOT / "expectations"
+# Reusable traits (three pillars): runtime (software), biology, domain. Written once, composed by many.
+TRAITS_ROOT = Path(__file__).parent / "traits"
 
 
 # --------------------------------------------------------------------------- #
 # Loading & schema validation
 # --------------------------------------------------------------------------- #
 
-def load_contract(tool_id: str) -> dict[str, Any]:
-    path = TOOLS_ROOT / tool_id / "contract.yml"
-    with open(path) as fh:
+def load_manifest(tool_id: str) -> dict[str, Any]:
+    with open(TOOLS_ROOT / tool_id / "manifest.yml") as fh:
         return yaml.safe_load(fh)
 
 
+def load_section(tool_id: str, rel_path: str) -> Any:
+    """Load one raw section yml (relative to the tool folder). Used for situational loading too —
+    e.g. open the `install` section only on an install error."""
+    with open(TOOLS_ROOT / tool_id / rel_path) as fh:
+        return yaml.safe_load(fh)
+
+
+def section_path(tool_id: str, section_name: str) -> str | None:
+    """Return the manifest path for a named section (any section, machine or context), or None."""
+    for ref in load_manifest(tool_id).get("sections", []):
+        if ref["name"] == section_name:
+            return ref["path"]
+    return None
+
+
+def load_trait(kind: str, name: str) -> dict[str, Any]:
+    """Load + validate a reusable trait (shared/traits/<kind>/<name>.yml) against the Trait schema."""
+    from shared.sections.schemas import Trait
+
+    with open(TRAITS_ROOT / kind / f"{name}.yml") as fh:
+        data = yaml.safe_load(fh)
+    Trait.model_validate(data)                    # raises on malformed trait
+    return data
+
+
+def list_traits(kind: str) -> list[str]:
+    d = TRAITS_ROOT / kind
+    return sorted(p.stem for p in d.glob("*.yml")) if d.exists() else []
+
+
+def _merge_failure_modes(base: list[dict], extra: list[dict]) -> list[dict]:
+    """Append `extra` failure_modes to `base`, deduped by id — base (tool-specific) wins."""
+    seen = {fm["id"] for fm in base}
+    return base + [fm for fm in extra if fm["id"] not in seen]
+
+
+def load_contract(tool_id: str) -> dict[str, Any]:
+    """Assemble the runtime contract dict from the tool's `machine: true` sections, then COMPOSE any
+    declared runtime traits (manifest `runtimes:`) into it.
+
+    Produces the same keys the harness already consumes: id, version, summary, expectations_ref,
+    execution, preconditions, must_not_use, failure_modes. `meta` merges (summary, expectations_ref);
+    the other machine sections map to a same-named key. Runtime traits contribute `failure_modes`
+    (e.g. any Java tool inherits the OOM→-Xmx fix) — deduped by id, tool-specific entries winning.
+    """
+    manifest = load_manifest(tool_id)
+    contract: dict[str, Any] = {"id": manifest["tool"], "version": manifest.get("version")}
+    for ref in manifest.get("sections", []):
+        if not ref.get("machine"):
+            continue
+        data = load_section(tool_id, ref["path"])
+        name = ref["name"]
+        if name == "meta":
+            contract.update(data or {})          # summary, expectations_ref
+        else:
+            contract[name] = data                 # execution / preconditions / must_not_use / failure_modes
+
+    # compose runtime traits (software pillar): inherit their failure_modes
+    for rt in manifest.get("runtimes", []):
+        trait = load_trait("runtime", rt)
+        if trait.get("failure_modes"):
+            contract["failure_modes"] = _merge_failure_modes(
+                contract.get("failure_modes", []), trait["failure_modes"])
+    return contract
+
+
+def find_hrr_markers(node: Any) -> list[str]:
+    """Recursively collect any HRR_ ('human review required') markers in a contract's values.
+
+    A scaffolded-but-unreviewed machine section carries HRR_ placeholders; their presence means the
+    tool's enforceable contract hasn't been vetted by a human yet.
+    """
+    from shared.sections.scaffold import HRR
+
+    found: list[str] = []
+    if isinstance(node, str):
+        if HRR in node:
+            found.append(node)
+    elif isinstance(node, dict):
+        for v in node.values():
+            found.extend(find_hrr_markers(v))
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            found.extend(find_hrr_markers(v))
+    return found
+
+
+def is_reviewed(contract: dict[str, Any]) -> bool:
+    """True iff the assembled contract has no HRR_ markers (i.e. a human has vetted it)."""
+    return not find_hrr_markers(contract)
+
+
 def validate_contract(contract: dict[str, Any]) -> None:
-    """Raise jsonschema.ValidationError if the contract is malformed."""
-    import json
+    """Validate the assembled contract's machine sections against their pydantic schemas.
 
-    import jsonschema
+    Replaces the old JSON-schema check on a monolithic contract.yml. Raises pydantic ValidationError
+    (or ValueError for a missing required key) if any section is malformed.
+    """
+    from shared.sections.schemas import (
+        ExecutionSection, LIST_SECTION_ITEM, MetaSection,
+    )
 
-    with open(SCHEMA_PATH) as fh:
-        schema = json.load(fh)
-    jsonschema.validate(contract, schema)
+    MetaSection.model_validate({"summary": contract.get("summary", ""),
+                                "expectations_ref": contract.get("expectations_ref")})
+    ExecutionSection.model_validate(contract.get("execution") or {})
+    for key, item_model in LIST_SECTION_ITEM.items():
+        for item in contract.get(key, []):
+            item_model.model_validate(item)
 
 
 def load_expectations(contract: dict[str, Any]) -> dict[str, Any]:

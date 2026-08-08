@@ -1,0 +1,5 @@
+# CLEAN context section. Validates against schemas.py:OutputSection.
+formats:
+  - format: sam
+    note: "alignments; written to stdout by default, or to a file with -S"
+note: "Convert/sort to BAM with samtools for downstream use; --summary-file writes an alignment summary."

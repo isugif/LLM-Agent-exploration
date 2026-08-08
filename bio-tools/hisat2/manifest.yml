@@ -1,0 +1,14 @@
+# Per-tool index. Validates against shared/sections/schemas.py:Manifest.
+# hisat2 is a REFERENCE ANCHOR for the `multi_step` tool type (see the curator's references/anchors.py).
+# It carries CONTEXT sections only — it is not wired into the harness, so it has no machine sections.
+tool: hisat2
+version: "2.2.3"
+sections:
+  - {name: install,      purpose: "how to install and verify HISAT2",        load_when: install_error,    machine: false, path: clean/install.yml}
+  - {name: input,        purpose: "reads (fastq/fasta) + a prebuilt index",  load_when: always,           machine: false, path: clean/input.yml}
+  - {name: output,       purpose: "SAM alignments",                          load_when: always,           machine: false, path: clean/output.yml}
+  - {name: usage,        purpose: "representative alignment invocations",    load_when: always,           machine: false, path: clean/usage.yml}
+  - {name: options,      purpose: "common flags",                            load_when: always,           machine: false, path: clean/options.yml}
+  - {name: dependencies, purpose: "optional downstream dependencies",        load_when: install_error,    machine: false, path: clean/dependencies.yml}
+  - {name: source,       purpose: "homepage / repository / docs links",      load_when: citation_request, machine: false, path: clean/source.yml}
+  - {name: citations,    purpose: "primary publication, license",            load_when: citation_request, machine: false, path: clean/citations.yml}

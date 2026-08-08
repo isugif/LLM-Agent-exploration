@@ -1,0 +1,18 @@
+# CLEAN context section. Validates against schemas.py:OptionsSection.
+options:
+  - flag: "-o / --outdir"
+    description: "write all output files to the specified (already-existing) directory"
+  - flag: "-t / --threads"
+    description: "number of files to process in parallel"
+  - flag: "-f / --format"
+    description: "force input format: fastq, bam, or sam"
+    default: "auto-detected"
+  - flag: "--extract"
+    description: "uncompress the zipped output after report generation"
+  - flag: "--nogroup"
+    description: "disable grouping of bases for per-base plots on long reads"
+  - flag: "--kmers"
+    description: "k-mer length (2-10) for the K-mer content module"
+    default: "7"
+  - flag: "-c / --contaminants"
+    description: "file of contaminant sequences to screen overrepresented sequences against"

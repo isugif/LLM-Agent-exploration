@@ -1,0 +1,7 @@
+# CLEAN context section. Validates against schemas.py:DependenciesSection.
+required:
+  - name: "Java Runtime Environment (JRE)"
+    note: ">=8 runtime required by FastQC"
+optional:
+  - name: "MultiQC"
+    note: "for aggregated multi-sample QC reporting"

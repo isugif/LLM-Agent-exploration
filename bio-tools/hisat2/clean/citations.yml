@@ -1,0 +1,6 @@
+# CLEAN context section (DOI fetch-verified via identify()). schemas.py:CitationsSection.
+primary_text: "Kim D, Paggi JM, Park C, Bennett C, Salzberg SL. (2019). Graph-based genome alignment and genotyping with HISAT2 and HISAT-genotype. Nature Biotechnology, 37(8):907-915."
+doi: "10.1038/s41587-019-0201-4"
+url: "http://daehwankimlab.github.io/hisat2/"
+license: "GPL-3.0-or-later"
+related: []

@@ -1,0 +1,11 @@
+# Reusable RUNTIME trait — composed by any Java tool via its manifest `runtimes: [java]`.
+# Enforceable: contributes failure_modes the diagnosis harness acts on. Written once, inherited by all
+# Java tools (fastqc, trimmomatic, picard, gatk, ...). Validates against schemas.py:Trait.
+id: java
+kind: runtime
+failure_modes:
+  - id: java_oom
+    signal: "OutOfMemoryError"
+    fix: "Increase the JVM heap, e.g. `export _JAVA_OPTIONS=\"-Xmx4G\"`, then rerun."
+references:
+  - "JVM heap sizing: the -Xmx flag sets maximum heap; OutOfMemoryError indicates the heap was exhausted."

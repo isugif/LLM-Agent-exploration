@@ -1,0 +1,5 @@
+# CLEAN context section. Validates against schemas.py:DependenciesSection.
+required: []
+optional:
+  - name: SAMtools
+    note: "to convert/sort/index the SAM output into BAM for downstream tools"

@@ -57,6 +57,17 @@ def judgment_node(state: dict) -> dict:
     spec = state["spec"]
     provider = get_provider()
 
+    # 0) human-review gate: refuse an un-vetted contract (HRR_ markers) before anything else.
+    if not cl.is_reviewed(contract):
+        markers = cl.find_hrr_markers(contract)
+        return {"route": RouteDecision(
+            action="refuse",
+            rationale=f"{contract['id']}'s contract is pending human review "
+                      f"({len(markers)} HRR_ marker(s) in machine sections).",
+            confidence=1.0,
+            precondition_failures=[f"unreviewed: {m}" for m in markers[:3]],
+        ).to_dict()}
+
     # 1) deterministic preconditions
     blocking, warnings = cl.evaluate_preconditions(contract, spec["declared"], spec["measured"])
     precondition_failures = [f"{b['id']}: {b.get('message','')}" for b in blocking]

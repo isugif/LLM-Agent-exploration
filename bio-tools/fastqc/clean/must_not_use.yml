@@ -1,0 +1,16 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Boundary.
+- id: not_cohort_qc
+  boundary: >
+    Not a cohort/aggregate QC tool. Do not treat one file's report as representative of a
+    multi-sample project or draw cohort-level conclusions from it — aggregate with MultiQC.
+  keywords: [cohort, aggregate, all samples, across samples, project-level, batch, overall quality]
+- id: not_a_trimmer
+  boundary: >
+    Not a read trimmer or corrector. FastQC emits reports only, never cleaned reads;
+    do not treat it as a preprocessing/trimming step that produces usable FASTQ.
+  keywords: [trim, trimmed reads, cleaned reads, adapter removal, filter reads, preprocess reads]
+- id: flags_not_contamination_calls
+  boundary: >
+    Adapter / overrepresented-sequence flags are signals, not contamination or species calls.
+    Do not conclude contamination or taxonomic identity from FastQC modules alone.
+  keywords: [contamination, contaminant, species id, taxonomy, what organism, identify organism]

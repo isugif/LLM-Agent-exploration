@@ -30,6 +30,18 @@ class JudgmentAgent(Agent):
         self.contract = cl.load_contract(tool_id)
 
     # --- deterministic tools ---
+    def review_gate(self) -> RouteDecision | None:
+        """Refuse an un-vetted contract (HRR_ markers in machine sections) before anything else."""
+        if cl.is_reviewed(self.contract):
+            return None
+        markers = cl.find_hrr_markers(self.contract)
+        return RouteDecision(
+            action="refuse",
+            rationale=f"{self.contract['id']}'s contract is pending human review "
+                      f"({len(markers)} HRR_ marker(s) in machine sections).",
+            confidence=1.0,
+            precondition_failures=[f"unreviewed: {m}" for m in markers[:3]])
+
     def check_preconditions(self, declared: dict, measured: dict):
         blocking, warnings = cl.evaluate_preconditions(self.contract, declared, measured)
         return blocking, warnings

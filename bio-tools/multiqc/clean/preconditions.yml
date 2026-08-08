@@ -1,0 +1,9 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Precondition.
+- id: input_is_report_dir
+  assert: "measured.format == 'report_dir'"
+  severity: block
+  message: "MultiQC expects a directory of tool reports to aggregate, not a single file."
+- id: reports_present
+  assert: "measured.n_reports > 0"
+  severity: block
+  message: "No recognized tool reports found in the input directory; nothing to aggregate."

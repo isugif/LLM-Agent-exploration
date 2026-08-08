@@ -1,0 +1,4 @@
+# CLEAN context section. Validates against schemas.py:SourceSection.
+homepage: "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/"
+repository: "https://github.com/s-andrews/FastQC"
+docs: "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/"

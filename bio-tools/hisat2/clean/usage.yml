@@ -1,0 +1,7 @@
+# CLEAN context section (curated from hisat2 --help, command corrected on review). schemas.py:UsageSection
+examples:
+  - description: "align paired-end reads to a prebuilt index (SAM to stdout)"
+    command: "hisat2 -x <ht2-idx> -1 <m1> -2 <m2>"
+  - description: "align single-end reads and write SAM to a file"
+    command: "hisat2 -x <ht2-idx> -U <r> -S aligned.sam"
+note: "Output is SAM on stdout by default; use -S to write a file. Requires a prebuilt HISAT2 index (-x), built with hisat2-build."

@@ -1,0 +1,22 @@
+# Per-tool index. Validates against shared/sections/schemas.py:Manifest.
+# The harness loads this, assembles the machine:true sections into the runtime contract, and opens
+# context sections situationally by load_when. Paths are relative to this tool folder.
+tool: fastqc
+version: "0.12.1"
+runtimes: [java]          # FastQC is a Java tool → inherits the Java runtime trait (OOM → -Xmx)
+sections:
+  # --- machine sections (assembled into the contract) ---
+  - {name: meta,          purpose: "summary + expectations link",          load_when: always, machine: true,  path: clean/meta.yml}
+  - {name: execution,     purpose: "how to run + install hint",             load_when: always, machine: true,  path: clean/execution.yml}
+  - {name: preconditions, purpose: "assertable input preconditions",        load_when: always, machine: true,  path: clean/preconditions.yml}
+  - {name: must_not_use,  purpose: "off-label boundaries",                  load_when: always, machine: true,  path: clean/must_not_use.yml}
+  - {name: failure_modes, purpose: "crash signals + fixes",                 load_when: always, machine: true,  path: clean/failure_modes.yml}
+  # --- context sections (loaded on demand) ---
+  - {name: install,       purpose: "how to install and verify FastQC",       load_when: install_error,    machine: false, path: clean/install.yml}
+  - {name: input,         purpose: "accepted formats, compression, layouts", load_when: always,           machine: false, path: clean/input.yml}
+  - {name: output,        purpose: "output artifacts and key files",         load_when: always,           machine: false, path: clean/output.yml}
+  - {name: usage,         purpose: "representative invocations",             load_when: always,           machine: false, path: clean/usage.yml}
+  - {name: options,       purpose: "common flags and their meaning",         load_when: always,           machine: false, path: clean/options.yml}
+  - {name: dependencies,  purpose: "required + optional dependencies",       load_when: install_error,    machine: false, path: clean/dependencies.yml}
+  - {name: source,        purpose: "homepage / repository / docs links",     load_when: citation_request, machine: false, path: clean/source.yml}
+  - {name: citations,     purpose: "primary publication, license, related",  load_when: citation_request, machine: false, path: clean/citations.yml}

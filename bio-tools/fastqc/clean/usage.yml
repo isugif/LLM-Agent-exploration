@@ -1,0 +1,7 @@
+# CLEAN context section. Validates against schemas.py:UsageSection.
+examples:
+  - description: "single-end reads, 2 threads, into an output directory"
+    command: "fastqc -t 2 -o read_qc sample.fastq.gz"
+  - description: "paired-end reads (both mates)"
+    command: "fastqc -t 2 -o read_qc sample_1.fastq.gz sample_2.fastq.gz"
+note: "The output directory must already exist; FastQC will not create it."

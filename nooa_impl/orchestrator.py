@@ -48,6 +48,12 @@ async def run_pipeline(fastq: str, question: str, deliverable: str | None = None
     report["spec"] = spec.to_dict()
 
     # --- 2. Judgment (fit critic) -------------------------------------------
+    gate = judge.review_gate()                    # HRR: refuse an unreviewed contract up front
+    if gate is not None:
+        report["route"] = gate.to_dict()
+        report["run_result"] = None
+        report["verdict"] = None
+        return report
     blocking, warnings = judge.check_preconditions(spec.declared, spec.measured)
     confirmed, boundary_notes = [], []
     tool_summary = (judge.contract.get("summary") or "").strip()

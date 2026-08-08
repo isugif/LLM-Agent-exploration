@@ -1,0 +1,13 @@
+# CLEAN context section. Validates against schemas.py:InstallSection.
+version: "1.35"
+methods:
+  - manager: pip
+    command: "pip install multiqc==1.35"
+  - manager: mamba
+    command: "mamba install -c bioconda multiqc=1.35"
+  - manager: conda
+    command: "conda install -c bioconda multiqc=1.35"
+verify_command: "multiqc --version"
+verify_expected: "multiqc, version 1.35"
+notes:
+  - "MultiQC is a Python package; pip is the most direct install."

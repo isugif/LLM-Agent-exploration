@@ -106,9 +106,50 @@ Because the tool library is shared data, adding MultiQC (contract.yml + parser +
 required **zero changes to either track**. The de-hardcoding (thread `tool_id`, derive scored metrics
 from the contract, generic argv runner) is what made both orchestrations tool-agnostic at once.
 
-## Open questions to revisit as the project grows
+## 8. Verdict at this size + where the edges are (2026-08-07)
 
-- Does LangGraph's explicit state pay off once we add retries, checkpoints, and human-in-the-loop
-  interrupts (its strengths), which we haven't exercised yet?
-- Does NOOA's `CodeActStrategy` (model writes Python) change the picture for the *compose* route,
-  where the workflow itself is assembled rather than chosen? Not used in milestone 1.
+**At current size there is no decisive advantage — partly by our own design.** The shared-core
+(`stages/steps.py`, `contracts_lib.py`, the validators) means both tracks are *thin orchestration
+wrappers* and hit parity on every path. So the harness has **neutralized** the frameworks rather than
+stress-tested them. The only real divergence we ever hit was the **LLM-call idiom** (§6), not
+orchestration. NOOA is marginally nicer to *write* (plain-Python fix-loop `while`, docstring-as-prompt
+typed extraction); LangGraph costs more ceremony for our mostly-linear + one-cycle flows but yields a
+nameable, inspectable graph.
+
+**The edges (where an advantage *would* appear — none exercised yet):**
+
+| Scenario | Edge to | Why |
+|---|---|---|
+| Human-in-the-loop curation (HRR / curation loop) | **LangGraph** | `interrupt()` + checkpointers = pause → human → resume |
+| Judgment "retrieve & match" over many candidates, concurrent + merged | **LangGraph** | `Send` fan-out + state reducers |
+| Durable, resumable, long runs; replay | **LangGraph** | built-in checkpointers |
+| The **compose** route — model *authors* a novel pipeline | **NOOA** | `CodeActStrategy` (model writes Python) |
+| Large bio objects (alignments/dataframes) between steps | **NOOA** | pass-by-reference + bounded previews, no context bloat |
+
+Pattern: **LangGraph wins when the *orchestration* gets hard; NOOA wins when you want the *model* to
+drive.**
+
+## 9. Can we keep both and use each where it's best? (hybrid)
+
+**Yes — because the shared-core made them interoperable libraries, not rival runtimes.** A NOOA agent
+method is an `async def` returning objects; a LangGraph node is a function returning a state dict — a
+node can simply `await nooa_agent.method(...)`. Clean shape: **LangGraph as the outer skeleton**
+(state, checkpoint/resume, human interrupts, fan-out) **calling NOOA agents at nodes that benefit**
+(compose/CodeAct, typed extraction, large-data).
+
+Costs to respect at the seam:
+- **State in two places** — checkpoint at LangGraph boundaries; treat a NOOA sub-agent call as an
+  *atomic* node (its internal CodeAct steps aren't individually resumable); put only *serializable*
+  results into checkpointed state. NOOA's big *live* objects deliberately don't serialize into a
+  checkpoint, so the resumability boundary must sit outside them.
+- Two dependencies + two mental models to maintain (NOOA 0.0.8 is young); observability spans both.
+
+Two senses of "retain both": **(a)** two parallel full implementations (what we have — value is
+*comparison*, cost ~2× orchestration) vs **(b)** one *hybrid* production build. Adopt (b) only after a
+concrete edge is confirmed. The architecture is already heterogeneous (a deterministic **Nextflow**
+execution layer sits under the LLM orchestration), so "LangGraph outer + NOOA nodes + Nextflow
+execution" is consistent with the design.
+
+**Recommendation:** keep the two parallel tracks while comparing; make the **human-curation loop** the
+first hybrid (LangGraph `interrupt()`/checkpoint skeleton + a NOOA CodeAct node for any compose step) —
+that's the moment the hybrid earns its keep.

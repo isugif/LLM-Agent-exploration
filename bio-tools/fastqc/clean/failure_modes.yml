@@ -1,0 +1,12 @@
+# CLEAN machine section (list). Each item validates against schemas.py:FailureMode.
+# NOTE: java_oom is NOT listed here — it is inherited from the `java` runtime trait
+# (shared/traits/runtime/java.yml) via manifest `runtimes: [java]`. Only tool-specific modes below.
+- id: malformed_fastq
+  signal: "Failed to process"
+  fix: "Input FASTQ is malformed/truncated. Validate integrity (record count multiple of 4, matching seq/qual lengths) before rerun."
+- id: empty_or_unreadable
+  signal: "Skipping"
+  fix: "Input file is empty or unreadable. Confirm the path, permissions, and that the file is non-empty."
+- id: not_a_fastq
+  signal: "didn't look like FASTQ"
+  fix: "File does not parse as FASTQ. Check that it is actually FASTQ (or FASTQ.gz), not FASTA/other."

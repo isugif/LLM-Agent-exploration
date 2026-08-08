@@ -1,0 +1,6 @@
+# CLEAN machine section (fact-only). Validates against schemas.py:MetaSection. Assembled into the contract.
+summary: >
+  First-pass quality control on raw/trimmed sequencing reads in FASTQ format.
+  Produces per-file HTML + ZIP reports of per-base quality, GC content,
+  duplication, adapter and overrepresented-sequence signals.
+expectations_ref: rnaseq_qc.yaml
