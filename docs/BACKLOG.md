@@ -199,6 +199,40 @@ drift-checker *after* the drift bit it). Add checks to `tests/`:
 
 ---
 
+## GitHub repos as an install + release-freshness source (integrate `repoReleases`)
+
+**Status:** 💡 idea
+
+**What:** Let the user register a tool's **GitHub repo URL** as another source of truth, and wire in
+the existing [`~/isugif/repoReleases`](https://github.com/isugif/repoReleases) tooling (a GitHub-API
+fetcher: given a list of repo URLs it pulls every release's name + notes and the issues referenced in
+each release body → `releases_data.json`). Two uses:
+
+1. **Install source of truth** — treat the repo as a first-class provisioning input alongside
+   bioconda. Today provisioning is **bioconda-only** (`curator/stages/provision.py`; pip-only /
+   source-only tools → `blocked_install`). A repo URL gives install/build instructions (README,
+   releases/tags, assets) for tools not on bioconda, and pins to a specific release tag.
+2. **Release-freshness + regression check** — for an already-installed tool, compare the installed
+   version against the latest GitHub release; if newer, surface the **release notes** and the
+   **referenced issues** so the assistant can flag "major changes since your last analysis" or "a
+   known issue was fixed/introduced." This feeds the **Diagnosis** harness (new failure modes appear
+   in release notes/issues) and post-run **Evaluation** ("were results affected by a since-patched
+   bug?").
+
+**Why it matters:** closes the bioconda-only gap and turns version drift from a silent risk into an
+actionable signal. The curator already has the adjacent pieces — `sourcing.source_from_url` (GitHub
+README) and `identify()` (propose→fetch-verify repo/DOI) — so the repo URL slots into the existing
+sourcing trust order; `repoReleases` adds the release/issue dimension on top.
+
+**Rough shape:** (a) accept `--repo <url>` in `curator/run.py`, store it in the tool's `source`
+section; (b) a release probe (port `getReleaseNotes.py`, token via `GITHUB_TOKEN` env — never
+hardcoded) that maps installed version → latest release + notes + issues; (c) a freshness check the
+harness can call on a known tool (gated, read-only). Start with the freshness check (low risk, no
+install path changes); add repo-based install later since it reintroduces model/human-authored build
+steps that the current whitelist-only provisioning deliberately avoids.
+
+---
+
 <!-- Template for new items:
 
 ## <short title>
