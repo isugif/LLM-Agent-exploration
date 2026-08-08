@@ -46,26 +46,42 @@ async function send(message, file, provider) {
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
 
   const thinking = addMsg("…", "assistant", "thinking");
-  for await (const { event, data } of sse(resp)) {
-    if (event === "meta") {
-      const m = JSON.parse(data);
-      addActivity(`intent: ${m.intent} · model: ${m.provider}`, "meta");
-    } else if (event === "log") {
-      addActivity(JSON.parse(data).text, "think");
-    } else if (event === "panel") {
-      renderPanel(JSON.parse(data));
-      addActivity("data profile ready", "ok");
-    } else if (event === "stage") {
-      const ev = JSON.parse(data);
-      renderStage(ev);
-      addActivity(stageLine(ev), "stage");
-    } else if (event === "prose") {
-      thinking.classList.remove("thinking");
-      thinking.textContent = JSON.parse(data).text;
-      log.scrollTop = log.scrollHeight;
-    } else if (event === "done") {
-      addActivity("done", "done");
+  startWork();
+  let planSteps = null;
+  try {
+    for await (const { event, data } of sse(resp)) {
+      if (event === "meta") {
+        const m = JSON.parse(data);
+        addActivity(`intent: ${m.intent} · model: ${m.provider}`, "meta");
+        term(`[meta] intent=${m.intent} model=${m.provider}`);
+      } else if (event === "plan") {
+        planSteps = JSON.parse(data).steps;
+        setProgressTotal(planSteps.length);
+      } else if (event === "log") {
+        const t = JSON.parse(data).text;
+        addActivity(t, "think"); setThinking(thinking, t); term("… " + t);
+      } else if (event === "panel") {
+        renderPanel(JSON.parse(data));
+        addActivity("data profile ready", "ok");
+      } else if (event === "stage") {
+        const ev = JSON.parse(data);
+        renderStage(ev);
+        addActivity(stageLine(ev), "stage");
+        setThinking(thinking, stageLine(ev));
+        advanceProgress(ev, planSteps);
+        termStage(ev);
+      } else if (event === "prose") {
+        const t = JSON.parse(data).text;
+        thinking.classList.remove("thinking");
+        thinking.textContent = t;
+        log.scrollTop = log.scrollHeight;
+        term("[response] " + t);
+      } else if (event === "done") {
+        addActivity("done", "done");
+      }
     }
+  } finally {
+    endWork();
   }
 }
 
@@ -73,6 +89,67 @@ function stageLine(ev) {
   const extra = ev.action || ev.status || (ev.installed === false ? "blocked" : "") ||
     (ev.section ? ev.status : "");
   return ev.title + (extra ? " — " + extra : "");
+}
+
+// ---- working state: progress bar + live "current step" spinner in the chat bubble ----
+function setThinking(bubble, text) {
+  bubble.classList.add("thinking");
+  bubble.innerHTML = `<span class="spin"></span><span class="cur"></span>`;
+  bubble.querySelector(".cur").textContent = text;
+  log.scrollTop = log.scrollHeight;
+}
+function startWork() {
+  const p = $("progress"), f = $("progress-fill");
+  p.hidden = false; p.classList.add("indeterminate"); f.style.width = "0%";
+  p.dataset.total = "0"; p.dataset.done = "0";
+}
+function setProgressTotal(n) {
+  const p = $("progress");
+  p.classList.remove("indeterminate");
+  p.dataset.total = String(n);
+}
+function advanceProgress(ev, planSteps) {
+  if (!planSteps) return;
+  const key = ev.section ? `curate:${ev.section}` : ev.stage;
+  const idx = planSteps.indexOf(key);
+  const p = $("progress");
+  const done = idx >= 0 ? idx + 1 : Number(p.dataset.done || 0);
+  p.dataset.done = String(done);
+  $("progress-fill").style.width = Math.round((done / planSteps.length) * 100) + "%";
+}
+function endWork() {
+  const p = $("progress"), f = $("progress-fill");
+  p.classList.remove("indeterminate");
+  f.style.width = "100%";
+  setTimeout(() => { p.hidden = true; f.style.width = "0%"; }, 500);
+}
+
+// ---- terminal tab: raw output ----
+function term(line) {
+  const t = $("terminal");
+  const empty = t.querySelector(".act-empty");
+  if (empty) empty.remove();
+  t.appendChild(document.createTextNode(line + "\n"));
+  t.scrollTop = t.scrollHeight;
+}
+function termStage(ev) {
+  if (ev.stage === "provision") {
+    term(ev.method ? "$ " + ev.method : `[provision] installed=${ev.installed}`);
+    if (ev.reason) term("  " + ev.reason);
+  } else if (ev.stage === "source") {
+    term(`[source] ${ev.chars} chars of --help${ev.url ? " + docs" : ""}`);
+  } else if (ev.stage === "curate") {
+    term(`[curate:${ev.section}] ${ev.status} (items=${ev.items}, fixes=${ev.fixes})`);
+  } else if (ev.stage === "execution") {
+    term(`[execution] exit=${ev.exit_code}`);
+    if (ev.stderr_tail) term(ev.stderr_tail.trimEnd());
+    if (ev.error) term("ERROR: " + ev.error);
+  } else if (ev.stage === "evaluation" || ev.stage === "diagnosis") {
+    term(`[${ev.stage}] ${ev.status}`);
+    (ev.findings || []).forEach((f) => term("  - " + f));
+  } else {
+    term(`[${ev.stage}] ${ev.title || ""}`);
+  }
 }
 
 // ---- right-hand data panel ----
@@ -275,6 +352,7 @@ function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   $("tab-output").hidden = name !== "output";
   $("tab-activity").hidden = name !== "activity";
+  $("tab-terminal").hidden = name !== "terminal";
   if (name === "activity") $("act-badge").hidden = true;
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));

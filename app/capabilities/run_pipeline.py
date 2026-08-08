@@ -15,7 +15,10 @@ from typing import Iterator, Optional
 from langgraph_impl.graph import build_graph
 
 # max stdout/stderr tail kept in an execution event (full logs stay in the audit record on disk)
-_TAIL = 600
+_TAIL = 4000
+
+# expected stages, for the UI progress bar (a refusal short-circuits after judgment; `done` completes it)
+PLAN = ["onboarding", "judgment", "execution", "evaluation"]
 
 
 def stage_events(message: str, tool: str, file: str,

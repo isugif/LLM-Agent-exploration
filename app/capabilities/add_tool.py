@@ -34,6 +34,13 @@ def _providers(ui_provider: Optional[str]):
     return {r: registry.resolve(r, override=override) for r in _ROLES}
 
 
+def plan(sections: Optional[list[str]] = None) -> list[str]:
+    """Expected stage keys for the UI progress bar (matches what stage_events yields)."""
+    sections = sections or DEFAULT_SECTIONS
+    return ["provision", "source"] + [f"curate:{s}" for s in sections] + \
+           ["persist", "scaffold", "hrr_gate"]
+
+
 def stage_events(tool: str, ui_provider: str = "auto", sections: Optional[list[str]] = None,
                  binary: Optional[str] = None, url: Optional[str] = None) -> Iterator[tuple[str, dict]]:
     """Blocking generator: yield (stage, payload) as the curator provisions + documents `tool`."""

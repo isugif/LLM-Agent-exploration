@@ -83,6 +83,7 @@ def make_chat_router() -> APIRouter:
                         {"text": "Which file should I run it on? Give me a FASTQ path."}))
                 else:
                     yield _sse("log", json.dumps({"text": f"Running {tool} on {file}…"}))
+                    yield _sse("plan", json.dumps({"steps": run_pipeline.PLAN}))
                     action = verdict_status = None
                     async for kind, payload in _abridge(
                             lambda: run_pipeline.stage_events(req.message, tool, file, req.provider or "auto")):
@@ -107,6 +108,7 @@ def make_chat_router() -> APIRouter:
                         {"text": "Which tool should I install? e.g. \"install seqkit\"."}))
                 else:
                     yield _sse("log", json.dumps({"text": f"Installing + documenting {tool}…"}))
+                    yield _sse("plan", json.dumps({"steps": add_tool.plan()}))
                     installed = False
                     version = None
                     markers = 0

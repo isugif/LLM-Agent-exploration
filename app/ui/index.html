@@ -44,7 +44,9 @@
       <div class="tabs" role="tablist">
         <button class="tab active" data-tab="output" role="tab">Output</button>
         <button class="tab" data-tab="activity" role="tab">Activity<span id="act-badge" class="badge-dot" hidden></span></button>
+        <button class="tab" data-tab="terminal" role="tab">Terminal</button>
       </div>
+      <div id="progress" class="progress" hidden><div id="progress-fill" class="progress-fill"></div></div>
       <div class="tab-body">
         <div id="tab-output" class="tab-pane">
           <div id="panel-empty" class="panel-empty">
@@ -56,6 +58,9 @@
           <div id="activity" class="activity">
             <div class="act-empty">Activity — what the agent is thinking and doing — appears here.</div>
           </div>
+        </div>
+        <div id="tab-terminal" class="tab-pane" hidden>
+          <pre id="terminal" class="terminal"><span class="act-empty">Raw output from each step appears here.</span></pre>
         </div>
       </div>
     </section>
