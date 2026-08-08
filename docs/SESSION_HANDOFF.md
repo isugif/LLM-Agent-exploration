@@ -16,6 +16,8 @@ Knowledge base (read these next):
 - [`CURATOR.md`](CURATOR.md) — the curator: verified-property tables, token costs, gotchas, the
   fact/judgment boundary + HRR standard. **The lab notebook — keep it updated.**
 - [`TRAITS.md`](TRAITS.md) — three-pillar trait composition (software/biology/tech).
+- [`PRINCIPLES.md`](PRINCIPLES.md) — cross-cutting design rules incl. the **authority hierarchy**
+  (which signal wins when two disagree) — the core silent-wrong-answer defense.
 - [`COMPARISON.md`](COMPARISON.md) — LangGraph vs NOOA, incl. §8–9 (verdict + hybrid feasibility).
 - [`ADD_A_TOOL.md`](ADD_A_TOOL.md) · [`BACKLOG.md`](BACKLOG.md) (prioritized next steps).
 
