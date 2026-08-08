@@ -40,9 +40,16 @@ class Intent(BaseModel):
     confidence: float = 0.0
 
 
+_KNOWN_TOOLS = ("fastqc", "multiqc", "hisat2", "star")
+
+
 def _heuristic(message: str) -> Intent:
-    """LLM-off fallback: a FASTQ path present => describe_data, else other."""
+    """LLM-off fallback: 'run' + a FASTQ => run_pipeline; a FASTQ alone => describe_data; else other."""
     files = FASTQ_RE.findall(message)
+    low = message.lower()
+    if files and re.search(r"\brun\b", low):
+        tool = next((t for t in _KNOWN_TOOLS if t in low), "fastqc")
+        return Intent(intent="run_pipeline", files=files, tool=tool, confidence=0.3)
     return Intent(intent="describe_data" if files else "other", files=files, confidence=0.3)
 
 
@@ -60,7 +67,6 @@ def classify(message: str, provider) -> Intent:
 
 STUB_CAPABILITIES = {
     "propose_strategy": "propose an analysis strategy for your data",
-    "run_pipeline": "run a tool or pipeline (with streamed logs)",
     "add_tool": "install and document a new tool via the curator",
 }
 

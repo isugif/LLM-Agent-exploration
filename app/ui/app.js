@@ -49,6 +49,8 @@ async function send(message, file, provider) {
   for await (const { event, data } of sse(resp)) {
     if (event === "panel") {
       renderPanel(JSON.parse(data));
+    } else if (event === "stage") {
+      renderStage(JSON.parse(data));
     } else if (event === "prose") {
       thinking.classList.remove("thinking");
       thinking.textContent = JSON.parse(data).text;
@@ -62,6 +64,7 @@ function renderPanel(p) {
   panelEmpty.hidden = true;
   panel.hidden = false;
   panel.innerHTML = "";
+  panel.dataset.mode = "profile";
 
   const h = document.createElement("div");
   h.innerHTML = `<h2>Data profile</h2><div class="file-name">${esc(p.file || "")}</div>`;
@@ -94,6 +97,65 @@ function renderPanel(p) {
   if (p.qual_by_pos && p.qual_by_pos.length) {
     panel.appendChild(card("Mean quality by position", lineChart(p.qual_by_pos)));
   }
+}
+
+// ---- pipeline stage timeline (run_pipeline) ----
+function renderStage(ev) {
+  panelEmpty.hidden = true;
+  panel.hidden = false;
+  if (panel.dataset.mode !== "pipeline") {          // first stage of a run -> reset
+    panel.innerHTML = `<h2>Pipeline run</h2><div class="file-name">four-harness flow</div>
+      <div id="stages"></div>`;
+    panel.dataset.mode = "pipeline";
+  }
+  document.getElementById("stages").appendChild(stageCard(ev));
+}
+
+function stageCard(ev) {
+  let body = "";
+  if (ev.stage === "onboarding") {
+    body = kvTable(ev.facts) + chips(ev.disagreements);
+  } else if (ev.stage === "judgment") {
+    const cls = ev.action === "run" ? "badge-ok" : "badge-bad";
+    body = `<span class="badge ${cls}">${esc(ev.action || "?")}</span>
+      <p>${esc(ev.rationale || "")}</p>` +
+      chips([...(ev.precondition_failures || []), ...(ev.action === "refuse" ? ev.boundary_hits || [] : [])]);
+  } else if (ev.stage === "execution") {
+    const cls = ev.ok ? "badge-ok" : "badge-bad";
+    body = `<span class="badge ${cls}">exit ${fmt(ev.exit_code)}</span>` +
+      (ev.out_dir ? `<div class="file-name">${esc(ev.out_dir)}</div>` : "") +
+      (ev.error ? `<p class="warn">${esc(ev.error)}</p>` : "") +
+      (ev.stderr_tail ? `<pre class="tail">${esc(ev.stderr_tail)}</pre>` : "");
+  } else if (ev.stage === "evaluation") {
+    const cls = ev.status === "ok" ? "badge-ok" : "badge-warn";
+    body = `<span class="badge ${cls}">${esc(ev.status)}</span>` +
+      metricsTable(ev.metrics) + list(ev.findings) +
+      (ev.explanation ? `<p class="ok">${esc(ev.explanation)}</p>` : "");
+  } else if (ev.stage === "diagnosis") {
+    body = `<span class="badge badge-bad">${esc(ev.status)}</span>` + list(ev.findings) +
+      (ev.proposed_fix ? `<p><b>Fix:</b> ${esc(ev.proposed_fix)}</p>` : "");
+  } else {
+    body = `<span class="warn">${esc(ev.error || "unknown stage")}</span>`;
+  }
+  return card(ev.title || ev.stage, body);
+}
+
+function kvTable(obj) {
+  const rows = Object.entries(obj || {})
+    .map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td class="v">${esc(fmt(v))}</td></tr>`).join("");
+  return rows ? `<table class="facts"><tbody>${rows}</tbody></table>` : "";
+}
+function metricsTable(metrics) {
+  const rows = Object.entries(metrics || {}).map(([k, s]) =>
+    `<tr><td class="k">${esc(k)}</td><td class="v">${esc(fmt(s && s.value))}</td>
+     <td class="v tier-${esc(s && s.tier)}">${esc(s && s.tier || "")}</td></tr>`).join("");
+  return rows ? `<table class="facts"><tbody>${rows}</tbody></table>` : "";
+}
+function chips(arr) {
+  return (arr || []).map((d) => `<span class="chip">⚠ ${esc(d)}</span>`).join("");
+}
+function list(arr) {
+  return (arr && arr.length) ? "<ul>" + arr.map((x) => `<li>${esc(x)}</li>`).join("") + "</ul>" : "";
 }
 
 function card(title, innerHTML) {

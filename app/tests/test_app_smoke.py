@@ -49,6 +49,24 @@ def test_intent_is_typed():
     assert Intent().intent == "other"
 
 
+def test_intent_run_pipeline_offline():
+    null = NullProvider()
+    it = classify("run fastqc on reads.fastq.gz", null)
+    assert it.intent == "run_pipeline"
+    assert it.tool == "fastqc"
+    assert it.files == ["reads.fastq.gz"]
+
+
+def test_run_pipeline_event_mapping():
+    from app.capabilities import run_pipeline as rp
+    ev = rp.to_event("judgment", {"route": {"action": "refuse", "rationale": "nope",
+                                            "precondition_failures": ["p1"], "boundary_hits": []}})
+    assert ev["stage"] == "judgment" and ev["action"] == "refuse"
+    ev2 = rp.to_event("evaluation", {"verdict": {"status": "anomaly", "findings": ["x"], "metrics": {}}})
+    assert ev2["stage"] == "evaluation" and ev2["status"] == "anomaly"
+    assert "refused" in rp.summary_line("refuse", None, "fastqc")
+
+
 @pytest.fixture()
 def offline(monkeypatch):
     """Force the deterministic NullProvider path so chat tests don't depend on a live LLM."""

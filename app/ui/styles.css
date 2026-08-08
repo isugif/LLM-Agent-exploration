@@ -80,6 +80,17 @@ table.facts td.v { font-variant-numeric: tabular-nums; }
   color: var(--warn); border-radius: 999px; padding: 3px 10px; margin: 3px 4px 0 0; font-size: 12px; }
 .ok { color: var(--muted); }
 
+.badge { display: inline-block; border-radius: 6px; padding: 2px 9px; font-size: 12px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.badge-ok  { background: rgba(63,185,80,.15);  color: #3fb950; border: 1px solid #3fb950; }
+.badge-bad { background: rgba(248,81,73,.15);  color: #f85149; border: 1px solid #f85149; }
+.badge-warn{ background: rgba(227,179,65,.15); color: var(--warn); border: 1px solid var(--warn); }
+.card ul { margin: 8px 0 0; padding-left: 18px; }
+.card p { margin: 8px 0 0; }
+pre.tail { background: #0b0f14; border: 1px solid var(--line); border-radius: 6px; padding: 8px;
+  font-size: 11px; overflow-x: auto; white-space: pre-wrap; margin-top: 8px; color: var(--muted); }
+td.tier-pass { color: #3fb950; } td.tier-warn { color: var(--warn); } td.tier-fail { color: #f85149; }
+
 svg { display: block; width: 100%; height: auto; }
 svg .bar { fill: var(--accent); }
 svg .line { fill: none; stroke: var(--accent); stroke-width: 2; }
