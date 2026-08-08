@@ -127,6 +127,30 @@ knowledge into checks and interpretation. Needs the onboarding classification st
 
 ---
 
+## Stress-test the framework edges (LangGraph vs NOOA) + hybrid
+
+**Status:** 💡 idea
+
+**What:** At current size neither framework has a decisive advantage (they're thin wrappers over the
+shared core; see [`docs/COMPARISON.md`](COMPARISON.md) §8–9). Two concrete experiments would surface
+the real differences, each aligned with a roadmap feature:
+- **LangGraph HITL checkpoint** — build the **human-curation loop** with LangGraph `interrupt()` +
+  a checkpointer: pause at an HRR/novel case, persist state, resume after human review. This is where
+  LangGraph should clearly win.
+- **NOOA CodeAct compose** — build the **compose route** (assemble a novel multi-tool pipeline) with
+  NOOA `CodeActStrategy`, letting the model author the orchestration. This is where NOOA should win.
+
+**Hybrid:** once an edge is confirmed, adopt a single **hybrid** build — LangGraph as the outer
+skeleton (state/persistence/interrupts/fan-out) calling **NOOA agents at nodes** that benefit
+(compose/CodeAct, typed extraction, large-data pass-by-reference). Seam discipline: checkpoint at
+LangGraph boundaries, treat a NOOA sub-call as atomic, marshal only serializable results into
+checkpointed state. Make the **human-curation loop the first hybrid**.
+
+**Why it matters:** tells us whether to keep two parallel implementations (comparison) or converge on
+one hybrid (production) — and which framework owns which part.
+
+---
+
 <!-- Template for new items:
 
 ## <short title>
