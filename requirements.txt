@@ -15,5 +15,9 @@ jsonschema
 requests
 pydantic
 
+# chat UI (app/) — FastAPI + uvicorn; SSE via StreamingResponse (Ollama stays on requests)
+fastapi>=0.111
+uvicorn[standard]>=0.29
+
 # External (not pip): FastQC 0.12.x  ->  mamba install -c bioconda fastqc
 # External: a local Ollama server + a model (default OLLAMA_MODEL=qwen2.5vl:7b)

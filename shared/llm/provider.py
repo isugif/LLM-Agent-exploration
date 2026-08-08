@@ -87,10 +87,76 @@ class OllamaProvider:
         return self._chat(system, prompt)
 
 
-def get_provider() -> "OllamaProvider | NullProvider":
-    """Return an OllamaProvider if the server responds, else a NullProvider."""
+def _strip_fence(text: str) -> str:
+    """Drop a leading ```json / ``` fence and trailing ``` if the model wrapped its JSON."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[-1] if "\n" in t else t[3:]
+        if t.rstrip().endswith("```"):
+            t = t.rstrip()[:-3]
+    return t.strip()
+
+
+class ClaudeCLIProvider:
+    """Claude via the local `claude` CLI login (no API key). Same tiny extract/complete interface.
+
+    Wraps curator/providers/claude_cli.py (imported lazily to avoid a shared->curator import at
+    module load). `extract` asks for schema-shaped JSON and validates it, mirroring OllamaProvider.
+    """
+
+    name = "claude"
+
+    def __init__(self):
+        from curator.providers.claude_cli import ClaudeCLIProvider as _CLI   # lazy
+        self._cli = _CLI()
+
+    def is_available(self) -> bool:
+        try:
+            return self._cli.is_available()
+        except Exception:                    # noqa: BLE001
+            return False
+
+    def complete(self, system: str, prompt: str) -> str:
+        try:
+            return self._cli.run(f"{system}\n\n{prompt}")
+        except Exception:                    # noqa: BLE001
+            return LLM_UNAVAILABLE
+
+    def extract(self, schema_model: Type[T], system: str, prompt: str) -> Optional[T]:
+        schema = json.dumps(schema_model.model_json_schema())
+        instruction = (f"{system}\n\nReturn ONLY a JSON object matching this JSON schema "
+                       f"(no prose, no markdown fence):\n{schema}\n\nInput:\n{prompt}")
+        try:
+            out = _strip_fence(self._cli.run(instruction))
+        except Exception:                    # noqa: BLE001
+            return None
+        try:
+            return schema_model.model_validate_json(out)
+        except Exception:                    # noqa: BLE001
+            try:
+                return schema_model.model_validate(json.loads(out))
+            except Exception:                # noqa: BLE001
+                return None
+
+
+def _ollama_up() -> bool:
     try:
         requests.get(f"{OLLAMA_HOST}/api/tags", timeout=3).raise_for_status()
-        return OllamaProvider()
+        return True
     except Exception:                        # noqa: BLE001
-        return NullProvider()
+        return False
+
+
+def get_provider(name: Optional[str] = None):
+    """Return a provider by name: 'ollama', 'claude', or None/'auto' (Ollama if up, else Null).
+
+    Every branch degrades to NullProvider rather than raising, so the pipeline always runs its
+    deterministic half. Existing callers use get_provider() (auto) unchanged.
+    """
+    if name == "ollama":
+        return OllamaProvider() if _ollama_up() else NullProvider()
+    if name == "claude":
+        p = ClaudeCLIProvider()
+        return p if p.is_available() else NullProvider()
+    # auto / None / anything else
+    return OllamaProvider() if _ollama_up() else NullProvider()
