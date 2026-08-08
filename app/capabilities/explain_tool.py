@@ -33,7 +33,9 @@ DOCS_CAP = 2500
 HIST_CAP = 1500
 
 RAG_SYSTEM = (
-    "You are a bioinformatics assistant. Answer the user's question about the tool. Treat the tool's "
+    "You are a bioinformatics assistant. Answer the user's MOST RECENT underlying request, using the "
+    "whole conversation to resolve what they mean — e.g. a short reply that only names a tool "
+    "continues the earlier question (do not restart with a generic overview). Treat the tool's "
     "`--help` as the SOURCE OF TRUTH for flags/parameters, and the curated documentation for context. "
     "Name exact flags. If a flag or behavior is NOT present in the provided --help or documentation, "
     "say you don't see it in the tool's help — do NOT guess or invent a flag name, default, or option."
@@ -149,10 +151,10 @@ def _answer(message: str, tool: str, wb: dict, provider, history: Optional[list[
         summary = (wb["sections"].get("meta", {}) or {}).get("summary", "")
         return (summary or f"See the {tool} documentation panel on the right.").strip()
 
-    parts = []
-    hist = _history_text(history)
-    if hist:
-        parts.append("Recent conversation (context only):\n" + hist)
+    # Include the current message IN the conversation so a one-word disambiguation ("fastqc") keeps
+    # the earlier question in scope, rather than becoming the whole question.
+    convo = list(history or []) + [{"role": "user", "content": message}]
+    parts = ["Conversation so far:\n" + _history_text(convo, cap=2200)]
     parts.append(f"Tool: {tool}")
     help_text = _live_help(tool)
     if help_text:
@@ -160,7 +162,6 @@ def _answer(message: str, tool: str, wb: dict, provider, history: Optional[list[
         help_ctx = (f"All flags:\n{flags[:3500]}\n\n{help_text[:1500]}") if flags else help_text[:HELP_CAP]
         parts.append(f"Authoritative `{tool} --help` (source of truth for flags):\n{help_ctx}")
     parts.append("Curated documentation:\n" + _context(wb)[:DOCS_CAP])
-    parts.append("Question: " + message)
     return provider.complete(RAG_SYSTEM, "\n\n".join(parts))
 
 
