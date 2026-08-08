@@ -17,6 +17,7 @@ class PipelineState(TypedDict, total=False):
     question: str
     deliverable: str
     out_dir: str
+    provider: str                      # LLM provider for this run: "ollama" | "claude" | "auto"/absent
 
     # onboarding
     declared: dict[str, Any]

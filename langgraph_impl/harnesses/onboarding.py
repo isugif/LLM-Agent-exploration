@@ -37,7 +37,7 @@ def _reconcile(declared: dict, measured: dict) -> list[str]:
 
 def onboarding_node(state: dict) -> dict:
     measured = get_probe(state["tool"])(state["fastq"])
-    provider = get_provider()
+    provider = get_provider(state.get("provider"))
 
     declared: dict = {}
     if not isinstance(provider, NullProvider):

@@ -55,7 +55,7 @@ def _confirm_boundary(provider, tool_id: str, tool_summary: str,
 def judgment_node(state: dict) -> dict:
     contract = cl.load_contract(state["tool"])
     spec = state["spec"]
-    provider = get_provider()
+    provider = get_provider(state.get("provider"))
 
     # 0) human-review gate: refuse an un-vetted contract (HRR_ markers) before anything else.
     if not cl.is_reviewed(contract):

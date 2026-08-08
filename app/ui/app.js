@@ -47,16 +47,32 @@ async function send(message, file, provider) {
 
   const thinking = addMsg("…", "assistant", "thinking");
   for await (const { event, data } of sse(resp)) {
-    if (event === "panel") {
+    if (event === "meta") {
+      const m = JSON.parse(data);
+      addActivity(`intent: ${m.intent} · model: ${m.provider}`, "meta");
+    } else if (event === "log") {
+      addActivity(JSON.parse(data).text, "think");
+    } else if (event === "panel") {
       renderPanel(JSON.parse(data));
+      addActivity("data profile ready", "ok");
     } else if (event === "stage") {
-      renderStage(JSON.parse(data));
+      const ev = JSON.parse(data);
+      renderStage(ev);
+      addActivity(stageLine(ev), "stage");
     } else if (event === "prose") {
       thinking.classList.remove("thinking");
       thinking.textContent = JSON.parse(data).text;
       log.scrollTop = log.scrollHeight;
+    } else if (event === "done") {
+      addActivity("done", "done");
     }
   }
+}
+
+function stageLine(ev) {
+  const extra = ev.action || ev.status || (ev.installed === false ? "blocked" : "") ||
+    (ev.section ? ev.status : "");
+  return ev.title + (extra ? " — " + extra : "");
 }
 
 // ---- right-hand data panel ----
@@ -238,6 +254,48 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ---- activity feed (right-panel "Activity" tab) ----
+function addActivity(text, kind) {
+  const feed = $("activity");
+  const empty = feed.querySelector(".act-empty");
+  if (empty) empty.remove();
+  const ts = new Date().toLocaleTimeString([], { hour12: false });
+  const line = document.createElement("div");
+  line.className = "act-line act-" + (kind || "info");
+  line.innerHTML = `<span class="ts">${ts}</span><span class="act-text">${esc(text)}</span>`;
+  feed.appendChild(line);
+  feed.scrollTop = feed.scrollHeight;
+  if (currentTab !== "activity") { $("act-badge").hidden = false; }   // nudge when not looking
+}
+
+// ---- tabs ----
+let currentTab = "output";
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+  $("tab-output").hidden = name !== "output";
+  $("tab-activity").hidden = name !== "activity";
+  if (name === "activity") $("act-badge").hidden = true;
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+// ---- input history (up/down arrows), like the kgx chat ----
+let inputHistory = [];
+let inputHistIdx = -1;
+$("message").addEventListener("keydown", (e) => {
+  const el = e.target;
+  if (e.key === "ArrowUp" && inputHistory.length > 0) {
+    e.preventDefault();
+    if (inputHistIdx === -1) inputHistIdx = inputHistory.length;
+    if (inputHistIdx > 0) { inputHistIdx--; el.value = inputHistory[inputHistIdx]; }
+  } else if (e.key === "ArrowDown" && inputHistIdx >= 0) {
+    e.preventDefault();
+    inputHistIdx++;
+    if (inputHistIdx >= inputHistory.length) { inputHistIdx = -1; el.value = ""; }
+    else { el.value = inputHistory[inputHistIdx]; }
+  }
+});
+
 // ---- wire up ----
 $("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -245,10 +303,13 @@ $("composer").addEventListener("submit", async (e) => {
   if (!msg) return;
   const file = $("file").value.trim();
   const provider = $("provider").value;
+  inputHistory.push(msg);
+  inputHistIdx = -1;
   addMsg(msg, "user");
+  addActivity("▸ " + msg, "turn");
   $("message").value = "";
   $("send").disabled = true;
   try { await send(msg, file, provider); }
-  catch (err) { addMsg("Error: " + err.message, "assistant", "warn"); }
+  catch (err) { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }
   finally { $("send").disabled = false; $("message").focus(); }
 });

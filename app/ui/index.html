@@ -35,15 +35,29 @@
                  placeholder="Tell me about the data…" />
           <button id="send" type="submit">Send</button>
         </div>
+        <div class="hint">↑↓ browse history · Enter to send</div>
       </form>
     </section>
 
-    <!-- RIGHT: data panel -->
-    <section class="panel" aria-label="data panel">
-      <div id="panel-empty" class="panel-empty">
-        The data profile — facts and plots — will appear here.
+    <!-- RIGHT: output + activity tabs -->
+    <section class="panel" aria-label="output">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="output" role="tab">Output</button>
+        <button class="tab" data-tab="activity" role="tab">Activity<span id="act-badge" class="badge-dot" hidden></span></button>
       </div>
-      <div id="panel" class="panel-content" hidden></div>
+      <div class="tab-body">
+        <div id="tab-output" class="tab-pane">
+          <div id="panel-empty" class="panel-empty">
+            The data profile / pipeline output will appear here.
+          </div>
+          <div id="panel" class="panel-content" hidden></div>
+        </div>
+        <div id="tab-activity" class="tab-pane" hidden>
+          <div id="activity" class="activity">
+            <div class="act-empty">Activity — what the agent is thinking and doing — appears here.</div>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
   <script src="/app.js"></script>

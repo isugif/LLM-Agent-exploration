@@ -46,7 +46,7 @@ def evaluation_node(state: dict) -> dict:
 
     # LLM explanation is additive only; never changes the deterministic status.
     explanation = None
-    provider = get_provider()
+    provider = get_provider(state.get("provider"))
     if findings and not isinstance(provider, NullProvider):
         explanation = provider.complete(
             system=f"You are a bioinformatics QC assistant. Explain flagged {tool_id} metrics briefly "

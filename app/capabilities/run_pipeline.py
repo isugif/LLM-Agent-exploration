@@ -18,10 +18,13 @@ from langgraph_impl.graph import build_graph
 _TAIL = 600
 
 
-def stage_events(message: str, tool: str, file: str) -> Iterator[tuple[str, dict]]:
-    """Blocking generator: yield (node_name, delta) as the pipeline runs."""
+def stage_events(message: str, tool: str, file: str,
+                 provider: str = "auto") -> Iterator[tuple[str, dict]]:
+    """Blocking generator: yield (node_name, delta) as the pipeline runs. `provider` selects the LLM
+    each harness node uses (onboarding/judgment/evaluation), honoring the UI dropdown."""
     graph = build_graph()
-    state = {"tool": tool, "fastq": file, "question": message, "deliverable": message}
+    state = {"tool": tool, "fastq": file, "question": message, "deliverable": message,
+             "provider": provider}
     for update in graph.stream(state):
         for node, delta in update.items():
             yield node, delta

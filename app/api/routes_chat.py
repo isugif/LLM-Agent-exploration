@@ -62,13 +62,15 @@ def make_chat_router() -> APIRouter:
     @router.post("/api/chat")
     async def chat(req: ChatRequest):
         provider = get_provider(req.provider)
-        intent = await run_in_threadpool(classify, req.message, provider)
-        file = req.file or (intent.files[0] if intent.files else None)
 
         async def gen():
+            yield _sse("log", json.dumps({"text": f"Classifying request (model: {provider.name})…"}))
+            intent = await run_in_threadpool(classify, req.message, provider)
+            file = req.file or (intent.files[0] if intent.files else None)
             yield _sse("meta", json.dumps({"provider": provider.name, "intent": intent.intent}))
 
             if intent.intent == "describe_data":
+                yield _sse("log", json.dumps({"text": f"Profiling {file or '(no file given)'}…"}))
                 result = await run_in_threadpool(describe_data.run, req.message, file, provider)
                 if result.get("panel") is not None:
                     yield _sse("panel", json.dumps(result["panel"]))
@@ -80,9 +82,10 @@ def make_chat_router() -> APIRouter:
                     yield _sse("prose", json.dumps(
                         {"text": "Which file should I run it on? Give me a FASTQ path."}))
                 else:
+                    yield _sse("log", json.dumps({"text": f"Running {tool} on {file}…"}))
                     action = verdict_status = None
                     async for kind, payload in _abridge(
-                            lambda: run_pipeline.stage_events(req.message, tool, file)):
+                            lambda: run_pipeline.stage_events(req.message, tool, file, req.provider or "auto")):
                         if kind == "error":
                             yield _sse("stage", json.dumps(
                                 {"stage": "error", "title": "Error", "error": payload}))
@@ -103,6 +106,7 @@ def make_chat_router() -> APIRouter:
                     yield _sse("prose", json.dumps(
                         {"text": "Which tool should I install? e.g. \"install seqkit\"."}))
                 else:
+                    yield _sse("log", json.dumps({"text": f"Installing + documenting {tool}…"}))
                     installed = False
                     version = None
                     markers = 0
