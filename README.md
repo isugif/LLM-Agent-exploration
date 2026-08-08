@@ -47,7 +47,7 @@ shared/            framework-agnostic knowledge + execution (BOTH tracks import 
 langgraph_impl/    LangGraph track: StateGraph + node functions   (+ CHANGELOG.md)
 nooa_impl/         NOOA track: Agent classes + plain orchestrator  (+ CHANGELOG.md)
 tests/             fixtures per failure mode + run_tests.py -> REPORT.md
-docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md, TRAITS.md
+docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md, TRAITS.md, PRINCIPLES.md
 shared/traits/     reusable constraints/knowledge (three pillars): runtime/ biology/ domain/
 ```
 

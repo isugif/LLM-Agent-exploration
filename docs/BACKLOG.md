@@ -151,6 +151,54 @@ one hybrid (production) — and which framework owns which part.
 
 ---
 
+## Unified error-code taxonomy → incident library
+
+**Status:** 💡 idea
+
+**What:** Codes are stable but scattered — `CheckResult.code` (curator), `failure_modes` ids +
+signals (diagnosis), HRR, route-refuse rationales, `blocked_install`. Consolidate into **one typed
+taxonomy** shared across harnesses, then build the premise's **incident library**: diagnosis matches a
+run against known codes → proposes the known fix; results-evaluation escalates a *novel* code through
+human curation into a new versioned entry.
+
+**Why it matters:** stable codes are what make the fix-loop, diagnosis, and the "system judgment
+compounds" loop work. See [`docs/PRINCIPLES.md`](PRINCIPLES.md) §4.
+
+---
+
+## Golden-file tests for the deterministic extraction layer
+
+**Status:** 📋 scoped
+
+**What:** The parsers/validators that turn tool output into facts (`shared/parsers/{fastqc,multiqc}_parse.py`,
+and the metric-scoring path) are the highest-risk surface — a mis-parsed metric silently flips a
+verdict. Add **golden-file tests**: commit a small real tool output (a `fastqc_data.txt`, a
+`multiqc_general_stats.txt`) and assert the parser yields the exact expected metric dict; add edge
+cases (missing module, empty file, odd formatting).
+
+**Why it matters:** rewriting the skill's checks and building the curator's grounding/version parsing
+surfaced several *self-inflicted* regex bugs. This layer is trusted but unverified — the exact
+silent-wrong-answer failure the project exists to prevent. See [`docs/PRINCIPLES.md`](PRINCIPLES.md) §5.
+
+---
+
+## Proactive parity / consistency gates (CI)
+
+**Status:** 💡 idea
+
+**What:** Make redundancy-policing first-class rather than reactive (the skill only wrote a
+drift-checker *after* the drift bit it). Add checks to `tests/`:
+- **Both tracks agree** — LangGraph vs NOOA emit identical spec/route/verdict on the same input
+  (currently asserted only in the curator's `run_m32`; do it for the harness too).
+- **References resolve** — every manifest `runtimes:` trait exists; every `expectations_ref` file
+  exists; every manifest section `path` exists and validates against its schema.
+- **(Later) clean-source ↔ rendered workbook** parity once the render step exists.
+
+**Why it matters:** turns a whole class of drift bugs from "caught once" into "can't happen". See
+[`docs/PRINCIPLES.md`](PRINCIPLES.md) §2.
+
+---
+
 <!-- Template for new items:
 
 ## <short title>
