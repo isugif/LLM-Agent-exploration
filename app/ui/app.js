@@ -382,12 +382,19 @@ function switchTab(name) {
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
-// ---- per-question navigation: dropdown + ⌘↑/⌘↓ ----
+// ---- navigation: ⌘↑/⌘↓ = question history, ⌘←/⌘→ = Output/Activity/Terminal tabs ----
+const TAB_ORDER = ["output", "activity", "terminal"];
+function cycleTab(dir) {
+  const i = Math.max(0, Math.min(TAB_ORDER.length - 1, TAB_ORDER.indexOf(currentTab) + dir));
+  switchTab(TAB_ORDER[i]);
+}
 $("turn-select").addEventListener("change", (e) => showTurn(parseInt(e.target.value, 10)));
 document.addEventListener("keydown", (e) => {
   if (!(e.metaKey || e.ctrlKey)) return;
   if (e.key === "ArrowUp") { e.preventDefault(); showTurn(view - 1); }
   else if (e.key === "ArrowDown") { e.preventDefault(); showTurn(view + 1); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); cycleTab(-1); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); cycleTab(1); }
 });
 
 // ---- input history (plain up/down arrows), like the kgx chat ----
