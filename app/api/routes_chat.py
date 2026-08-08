@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 
 from shared.llm.provider import get_provider
 from app.intent import classify, stub_text
-from app.capabilities import describe_data, run_pipeline
+from app.capabilities import describe_data, run_pipeline, add_tool
 
 
 class ChatRequest(BaseModel):
@@ -96,6 +96,30 @@ def make_chat_router() -> APIRouter:
                         yield _sse("stage", json.dumps(ev))
                     yield _sse("prose", json.dumps(
                         {"text": run_pipeline.summary_line(action, verdict_status, tool)}))
+
+            elif intent.intent == "add_tool":
+                tool = (intent.tool or "").strip().lower()
+                if not tool or tool == "unknown":
+                    yield _sse("prose", json.dumps(
+                        {"text": "Which tool should I install? e.g. \"install seqkit\"."}))
+                else:
+                    installed = False
+                    version = None
+                    markers = 0
+                    async for kind, payload in _abridge(
+                            lambda: add_tool.stage_events(tool, req.provider or "auto")):
+                        if kind == "error":
+                            yield _sse("stage", json.dumps(
+                                {"stage": "error", "title": "Error", "error": payload}))
+                            continue
+                        stage, data = payload
+                        if stage == "provision":
+                            installed, version = data.get("installed", False), data.get("version")
+                        if stage == "hrr_gate":
+                            markers = data.get("markers", 0)
+                        yield _sse("stage", json.dumps(add_tool.to_event(stage, data)))
+                    yield _sse("prose", json.dumps(
+                        {"text": add_tool.summary_line(tool, installed, version, markers)}))
 
             else:
                 yield _sse("prose", json.dumps({"text": stub_text(intent)}))

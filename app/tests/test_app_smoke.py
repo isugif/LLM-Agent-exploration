@@ -57,6 +57,25 @@ def test_intent_run_pipeline_offline():
     assert it.files == ["reads.fastq.gz"]
 
 
+def test_intent_add_tool_offline():
+    null = NullProvider()
+    assert classify("install seqkit", null).intent == "add_tool"
+    assert classify("install seqkit", null).tool == "seqkit"
+    assert classify("add the tool star", null).tool == "star"
+    # "run fastqc on x.fastq" must still win as run_pipeline, not add_tool
+    assert classify("run fastqc on x.fastq.gz", null).intent == "run_pipeline"
+
+
+def test_add_tool_event_mapping():
+    from app.capabilities import add_tool as at
+    ev = at.to_event("curate", {"section": "usage", "status": "valid", "fixes": 0, "items": 2})
+    assert ev["stage"] == "curate" and ev["title"] == "Curate: usage"
+    gate = at.to_event("hrr_gate", {"tool": "seqkit", "markers": 13, "reviewed": False})
+    assert gate["title"] == "Human-review gate" and gate["markers"] == 13
+    assert "not runnable" in at.summary_line("seqkit", True, "2.13.0", 13)
+    assert "couldn't install" in at.summary_line("nope", False, None, 0)
+
+
 def test_run_pipeline_event_mapping():
     from app.capabilities import run_pipeline as rp
     ev = rp.to_event("judgment", {"route": {"action": "refuse", "rationale": "nope",
@@ -90,7 +109,8 @@ def test_chat_describe_data_sse(fastq, offline):
 
 def test_chat_stub_for_unwired_intent(offline):
     client = TestClient(create_app())
-    r = client.post("/api/chat", json={"message": "add the tool star", "provider": "auto"})
+    # offline heuristic maps a non-file, non-install/run message to 'other' -> a stub
+    r = client.post("/api/chat", json={"message": "help me plan my experiment", "provider": "auto"})
     assert r.status_code == 200
     events = _parse_sse(r.text)
     assert "panel" not in events                      # stub carries no data panel

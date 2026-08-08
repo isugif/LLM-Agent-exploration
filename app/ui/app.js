@@ -134,6 +134,27 @@ function stageCard(ev) {
   } else if (ev.stage === "diagnosis") {
     body = `<span class="badge badge-bad">${esc(ev.status)}</span>` + list(ev.findings) +
       (ev.proposed_fix ? `<p><b>Fix:</b> ${esc(ev.proposed_fix)}</p>` : "");
+  } else if (ev.stage === "provision") {
+    if (ev.installed) {
+      body = `<span class="badge badge-ok">installed</span>` +
+        kvTable({ version: ev.version, binary: ev.binary, via: ev.method });
+    } else {
+      body = `<span class="badge badge-bad">blocked</span><p class="warn">${esc(ev.reason || "")}</p>`;
+    }
+  } else if (ev.stage === "source") {
+    body = `<p>${esc(fmt(ev.chars))} chars of --help${ev.url ? " + docs" : ""} captured.</p>`;
+  } else if (ev.stage === "curate") {
+    const cls = ev.status === "valid" ? "badge-ok" : "badge-warn";
+    body = `<span class="badge ${cls}">${esc(ev.status)}</span>` +
+      kvTable({ items: ev.items, fixes: ev.fixes });
+  } else if (ev.stage === "persist") {
+    body = list([...(ev.sections_written || []), ev.manifest].filter(Boolean));
+  } else if (ev.stage === "scaffold") {
+    body = list(ev.hrr_files);
+  } else if (ev.stage === "hrr_gate") {
+    body = `<span class="badge badge-warn">review required</span>
+      <p>${esc(fmt(ev.markers))} HRR marker(s) — the tool is documented but the judgment harness
+      will refuse to run it until a human reviews its safety contract.</p>`;
   } else {
     body = `<span class="warn">${esc(ev.error || "unknown stage")}</span>`;
   }
