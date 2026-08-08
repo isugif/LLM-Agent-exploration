@@ -1,5 +1,9 @@
 # LLM-Agent-exploration
 
+> **Resuming?** Start with [`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md) — env, resume commands,
+> what's built, and prioritized next steps.
+
+
 Building an **agentic bioinformatician** two ways — with [LangGraph](https://langchain-ai.github.io/langgraph/)
 and with [NVIDIA Object-Oriented Agents (NOOA)](https://github.com/NVIDIA-NeMo/labs-OO-Agents) — on
 the *same* architecture, so the frameworks can be compared honestly.

@@ -3,12 +3,19 @@
 A durable record of what the `section-yml-curator` agent does, what's been **verified**, what it
 **costs**, and the **gotchas** discovered — so we can reference rather than rediscover.
 
-> **Where the code lives:** the curator agent is in `temp/curator/` (gitignored, not yet in the repo).
-> Its **data** is committed: `shared/sections/schemas.py` (fact-only section schemas) and
-> `bio-tools/<tool>/{manifest.yml,clean/*.yml}`. Per-framework loop write-ups:
-> `temp/curator/{langgraph_curator,nooa_curator}/ARCHITECTURE.md`.
+> **Where the code lives:** the curator agent is committed at `curator/` (its demo outputs `curator/out/`
+> are gitignored). Its **data** is also committed: `shared/sections/schemas.py` (fact-only section
+> schemas) and `bio-tools/<tool>/{manifest.yml,clean/*.yml}`. Per-framework loop write-ups:
+> `curator/{langgraph_curator,nooa_curator}/ARCHITECTURE.md`.
 >
 > **Keep this file updated** as we add features — treat it like a lab notebook for the curator.
+
+## Acknowledgments
+
+The original **`section-yml-curator`** skill — which this agent reimplements in LangGraph and NOOA —
+was **designed by Alex Badaczewska-Dawid ([GitHub @aedawid](https://github.com/aedawid))**, as part of
+the **bio-omics workbook redesign**. This work reimplements that skill as an agent and adds the
+LLM-readable clean-YAML section redesign and the HRR human-review gate.
 
 ## What it is (one paragraph)
 
@@ -16,7 +23,7 @@ The curator turns a tool's documentation **source** (`--help`, docs URL, or exis
 **clean, fact-only per-section YAML** validated against typed schemas. Pipeline:
 `provision → classify → source-transfer (fill typed schema) → enrich → validate → (fix ↻) → finalize`.
 Built in **both** LangGraph (conditional-cycle) and NOOA (bounded `while`) over one shared set of
-stage functions (`temp/curator/stages/steps.py`), so the two tracks produce identical results.
+stage functions (`curator/stages/steps.py`), so the two tracks produce identical results.
 
 ## Verified properties
 
@@ -162,8 +169,8 @@ dry-run validation, keep `--help` untruncated for grounding.
   anchoring, but an LLM tie-breaker could sharpen it.
 
 ## Key files
-- Pipeline: `temp/curator/stages/steps.py`; orchestration: `…/langgraph_curator/graph.py`, `…/nooa_curator/orchestrator.py`.
-- References: `temp/curator/references/{tool_types,anchors,generalize,sourcing}.py`.
-- Provisioning: `temp/curator/stages/provision.py`, `temp/curator/bootstrap.py`.
-- Validators: `temp/curator/validators/framework.py`. Providers: `temp/curator/providers/*`.
-- Schemas (committed): `shared/sections/schemas.py`. Demos: `temp/curator/run_*.py`.
+- Pipeline: `curator/stages/steps.py`; orchestration: `…/langgraph_curator/graph.py`, `…/nooa_curator/orchestrator.py`.
+- References: `curator/references/{tool_types,anchors,generalize,sourcing}.py`.
+- Provisioning: `curator/stages/provision.py`, `curator/bootstrap.py`.
+- Validators: `curator/validators/framework.py`. Providers: `curator/providers/*`.
+- Schemas (committed): `shared/sections/schemas.py`. Demos: `curator/run_*.py`.

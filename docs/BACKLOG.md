@@ -81,7 +81,7 @@ Loose ends left after moving the contract to clean per-section ymls (harness cut
 
 **What:** Prevent/catch the curator copying a FACT from a few-shot anchor instead of the source (a
 DB3 violation — e.g. fastqc's `-o` leaking into a hisat2 command). Two guards are **already built**
-in `temp/curator/`:
+in `curator/`:
 - **flag-grounding** (`validators/framework.py:usage_flags_grounded / options_flags_grounded`) —
   every flag in a generated command/option must appear in the tool's `--help`; failures drive the
   fix-loop.

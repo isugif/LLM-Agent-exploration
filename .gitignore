@@ -8,6 +8,9 @@ __pycache__/
 .venv/
 .env
 
+# curator demo outputs (the curator code IS tracked; its run artifacts are not)
+curator/out/
+
 # test data (regenerate with shared/data/fetch_virus_fastq.sh)
 shared/data/*.fastq.gz
 shared/data/*.fastq
