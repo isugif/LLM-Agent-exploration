@@ -28,6 +28,7 @@ class ChatRequest(BaseModel):
     message: str
     provider: str | None = None            # 'ollama' | 'claude' | 'auto'/None
     file: str | None = None                # optional explicit file path from the UI
+    history: list[dict] = []               # prior turns [{role, content}] for context (memory)
 
 
 def _sse(event: str, data: str) -> str:
@@ -65,7 +66,7 @@ def make_chat_router() -> APIRouter:
 
         async def gen():
             yield _sse("log", json.dumps({"text": f"Classifying request (model: {provider.name})…"}))
-            intent = await run_in_threadpool(classify, req.message, provider)
+            intent = await run_in_threadpool(classify, req.message, provider, req.history)
             file = req.file or (intent.files[0] if intent.files else None)
             yield _sse("meta", json.dumps({"provider": provider.name, "intent": intent.intent}))
 
@@ -137,7 +138,8 @@ def make_chat_router() -> APIRouter:
                         {"text": "Which tool? e.g. \"tell me about fastqc\"."}))
                 else:
                     yield _sse("log", json.dumps({"text": f"Looking up {tool} documentation…"}))
-                    result = await run_in_threadpool(explain_tool.run, req.message, tool, provider)
+                    result = await run_in_threadpool(explain_tool.run, req.message, tool, provider,
+                                                     req.history)
                     if result.get("panel") is not None:
                         yield _sse("panel", json.dumps(result["panel"]))
                     yield _sse("prose", json.dumps({"text": result.get("prose", "")}))

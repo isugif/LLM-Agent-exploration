@@ -37,11 +37,13 @@ async function* sse(resp) {
   }
 }
 
-async function send(message, file, provider, signal) {
+let convo = [];   // [{role, content}] conversation memory (a bounded window is sent each turn)
+
+async function send(message, file, provider, signal, history) {
   const resp = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, file: file || null, provider }),
+    body: JSON.stringify({ message, file: file || null, provider, history: history || [] }),
     signal,
   });
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
@@ -77,6 +79,8 @@ async function send(message, file, provider, signal) {
         thinking.textContent = t;
         log.scrollTop = log.scrollHeight;
         term("[response] " + t);
+        convo.push({ role: "assistant", content: t });
+        if (convo.length > 40) convo = convo.slice(-40);   // bound in-memory growth
       } else if (event === "done") {
         addActivity("done", "done");
       }
@@ -442,9 +446,11 @@ $("composer").addEventListener("submit", async (e) => {
   addMsg(msg, "user");
   addActivity("▸ " + msg, "turn");
   $("message").value = "";
+  const history = convo.slice(-6);       // send the last few turns for context
+  convo.push({ role: "user", content: msg });
   inFlight = true; setStopMode(true);
   abortCtrl = new AbortController();
-  try { await send(msg, file, provider, abortCtrl.signal); }
+  try { await send(msg, file, provider, abortCtrl.signal, history); }
   catch (err) {
     if (err.name === "AbortError") { addActivity("stopped by user", "err"); }
     else { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }

@@ -10,7 +10,7 @@ UI shows what's coming without pretending to do it.
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -73,11 +73,17 @@ def _heuristic(message: str) -> Intent:
     return Intent(intent="describe_data" if files else "other", files=files, confidence=0.3)
 
 
-def classify(message: str, provider) -> Intent:
-    """Classify a message into an Intent. Falls back to a heuristic when the LLM is unavailable."""
+def classify(message: str, provider, history: Optional[list[dict]] = None) -> Intent:
+    """Classify a message into an Intent. Recent history lets the LLM resolve follow-ups ("what about
+    the other one?"). Falls back to a heuristic when the LLM is unavailable."""
     parsed = None
     if getattr(provider, "name", "null") != "null":
-        parsed = provider.extract(Intent, system=_SYSTEM, prompt=message)
+        prompt = message
+        if history:
+            recent = "\n".join(f"{t.get('role', 'user')}: {(t.get('content') or '').strip()}"
+                               for t in history[-6:] if (t.get('content') or '').strip())[-1200:]
+            prompt = f"Recent conversation:\n{recent}\n\nNew message: {message}"
+        parsed = provider.extract(Intent, system=_SYSTEM, prompt=prompt)
     if parsed is None:
         return _heuristic(message)
     if not parsed.files:                       # backstop: catch a path the model overlooked

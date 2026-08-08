@@ -91,10 +91,22 @@ def test_explain_tool_workbook_and_run():
     wb = et.load_workbook("fastqc")
     assert wb and wb["sections"].get("meta")
     assert et.load_workbook("nope_xyz") is None
-    out = et.run("what parameters does it have?", "fastqc", NullProvider())
+    out = et.run("what parameters does it have?", "fastqc", NullProvider(), history=[])
     assert out["panel"]["kind"] == "tool"
     assert len(out["panel"]["options"]) > 0            # parameters surfaced
     assert out["panel"]["boundaries"]                  # off-label boundaries present
+
+
+def test_explain_tool_history_is_bounded():
+    from app.capabilities import explain_tool as et
+    huge = [{"role": "user", "content": "x" * 5000} for _ in range(20)]
+    assert len(et._history_text(huge)) <= et.HIST_CAP   # sliding-window budget respected
+
+
+def test_classify_accepts_history():
+    # history is optional and must not break the offline heuristic path
+    it = classify("tell me about fastqc", NullProvider(), history=[{"role": "user", "content": "hi"}])
+    assert it.intent == "explain_tool" and it.tool == "fastqc"
 
 
 def test_add_tool_docs_check_plan():
