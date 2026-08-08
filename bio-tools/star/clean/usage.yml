@@ -1,0 +1,5 @@
+# CLEAN context section (curator-generated). Validates against schemas.py.
+examples:
+- description: align reads to a genome
+  command: STAR --genomeDir /path/to/genome/index/ --readFilesIn R1.fq R2.fq
+note: null

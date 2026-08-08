@@ -169,6 +169,8 @@ dry-run validation, keep `--help` untruncated for grounding.
   anchoring, but an LLM tie-breaker could sharpen it.
 
 ## Key files
+- Entrypoint (CLI + `run_curator()`): `curator/run.py` — `python -m curator.run --tool <id>` (auto-resolves
+  package↔binary name mismatches like `star`→`STAR`; `--binary`/`--url`/`--full`/`--no-install`).
 - Pipeline: `curator/stages/steps.py`; orchestration: `…/langgraph_curator/graph.py`, `…/nooa_curator/orchestrator.py`.
 - References: `curator/references/{tool_types,anchors,generalize,sourcing}.py`.
 - Provisioning: `curator/stages/provision.py`, `curator/bootstrap.py`.

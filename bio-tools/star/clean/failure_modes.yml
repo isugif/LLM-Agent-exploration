@@ -1,0 +1,8 @@
+# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
+# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
+# │ placeholder with expert-reviewed content and delete the markers. Until then │
+# │ the harness REFUSES to route this tool.                                     │
+# └────────────────────────────────────────────────────────────────────────────┘
+- id: HRR_failure_1
+  signal: HRR_stderr substring that indicates this failure
+  fix: HRR_the known fix
