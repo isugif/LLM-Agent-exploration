@@ -1,0 +1,10 @@
+# Reusable BIOLOGY trait — curated knowledge (interpretive). The eukaryote contrast.
+# Validates against schemas.py:Trait.
+id: prokaryote
+kind: biology
+considerations:
+  - "Prokaryotic genes are typically intronless; a DNA aligner is usually appropriate for genomic reads, and transcript = gene sequence (no splicing to account for)."
+  - "Genes are often organized in operons transcribed as a single polycistronic mRNA — one transcript can cover several genes."
+  - "The genome is usually a single circular chromosome (plus plasmids), compact with little intergenic space."
+references:
+  - "Operon organization and the general absence of introns are canonical features of prokaryotic genomes."

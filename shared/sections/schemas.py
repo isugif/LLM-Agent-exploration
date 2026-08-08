@@ -193,6 +193,27 @@ MACHINE_SECTIONS = {"meta", "execution", "preconditions", "must_not_use", "failu
 
 
 # --------------------------------------------------------------------------- #
+# traits — shared, reusable constraints/knowledge composed into tools (three pillars)
+# --------------------------------------------------------------------------- #
+
+class Trait(BaseModel):
+    """A reusable constraint or knowledge unit, written once and composed by many tools/runs.
+
+    Two shapes:
+      * ENFORCEABLE (kind=runtime) — contributes `failure_modes`/`preconditions` the harness ACTS on
+        (e.g. Java → OutOfMemoryError → -Xmx). Merged into a tool's contract via manifest `runtimes`.
+      * INTERPRETIVE (kind=biology|domain) — `considerations`: curated knowledge that informs
+        interpretation (e.g. "eukaryotes have introns"). Recorded now; consumption is future work.
+    """
+    id: str
+    kind: Literal["runtime", "biology", "domain"]
+    failure_modes: list[FailureMode] = Field(default_factory=list)
+    preconditions: list[Precondition] = Field(default_factory=list)
+    considerations: list[str] = Field(default_factory=list, description="interpretive caveats")
+    references: list[str] = Field(default_factory=list, description="citations making the knowledge auditable")
+
+
+# --------------------------------------------------------------------------- #
 # manifest — the situational-loading index
 # --------------------------------------------------------------------------- #
 
@@ -213,6 +234,8 @@ class Manifest(BaseModel):
     tool: str
     version: str
     sections: list[SectionRef]
+    runtimes: list[str] = Field(default_factory=list,
+                                description="runtime traits to compose, e.g. [java] — see shared/traits/runtime/")
 
 
 # --------------------------------------------------------------------------- #

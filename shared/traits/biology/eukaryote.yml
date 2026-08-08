@@ -1,0 +1,11 @@
+# Reusable BIOLOGY trait — curated knowledge (interpretive). Recorded now; consumption (attach at
+# onboarding by organism→domain classification, surface in results-evaluation) is future work.
+# Validates against schemas.py:Trait.
+id: eukaryote
+kind: biology
+considerations:
+  - "Eukaryotic genes contain introns; the mature mRNA is spliced, so RNA-seq reads span exon-exon junctions and differ from the genomic sequence — align RNA-seq with a splice-aware aligner (HISAT2/STAR), not a plain DNA aligner."
+  - "Alternative splicing means one gene can produce multiple isoforms; a single 'gene = one transcript' assumption is wrong."
+  - "Genomes are usually large, may be polyploid, and carry substantial repetitive/intergenic content — affects assembly, mapping multiplicity, and coverage interpretation."
+references:
+  - "Introns and pre-mRNA splicing are a defining feature of eukaryotic gene expression (molecular biology, canonical)."

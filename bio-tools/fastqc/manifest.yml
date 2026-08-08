@@ -3,6 +3,7 @@
 # context sections situationally by load_when. Paths are relative to this tool folder.
 tool: fastqc
 version: "0.12.1"
+runtimes: [java]          # FastQC is a Java tool → inherits the Java runtime trait (OOM → -Xmx)
 sections:
   # --- machine sections (assembled into the contract) ---
   - {name: meta,          purpose: "summary + expectations link",          load_when: always, machine: true,  path: clean/meta.yml}

@@ -105,6 +105,28 @@ guards make the curator's "no fabrication beyond source" promise enforceable, no
 
 ---
 
+## Data-trait consumption (technology + biology pillars)
+
+**Status:** 📋 scoped
+
+**What:** The trait *mechanism* and an interpretive knowledge library exist (`shared/traits/`,
+[`docs/TRAITS.md`](TRAITS.md)) — runtime traits already compose into contracts (Java proof). What's
+missing is **consuming data traits** at run time:
+- **Classify** a run's platform (Illumina/Nanopore/…) and organism-domain (eukaryote/prokaryote) at
+  onboarding, from measured + declared facts.
+- **Attach** the matching traits to the spec.
+- **Judgment cross-check:** tool `operating_range`/`must_not_use` × data traits (e.g. short-read
+  aligner × Nanopore read-length → refuse — the fit-critic payoff).
+- **Results-evaluation / interpreter:** surface each trait's `considerations` (e.g. "eukaryotes have
+  introns → use a splice-aware aligner") alongside the verdict.
+- Add `platform` traits (`shared/traits/platform/{illumina,nanopore}.yml`) and extend enforceable
+  composition beyond `failure_modes` to `preconditions`/dependencies.
+
+**Why it matters:** this is the higher-value half of the three-pillars idea — turning recorded
+knowledge into checks and interpretation. Needs the onboarding classification step first.
+
+---
+
 <!-- Template for new items:
 
 ## <short title>

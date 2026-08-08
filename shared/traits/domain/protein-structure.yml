@@ -1,0 +1,9 @@
+# Reusable DOMAIN trait — curated knowledge (interpretive). Validates against schemas.py:Trait.
+id: protein-structure
+kind: domain
+considerations:
+  - "A solved or predicted structure is a single STATIC snapshot; real proteins are dynamic — thermal breathing, side-chain and domain motions, conformational ensembles, and intrinsically disordered regions. Do not treat one conformation as 'the' structure."
+  - "Interpret with the structure's own uncertainty: crystallographic B-factors / pLDDT (for predictions) flag flexible or low-confidence regions; multiple deposited models or NMR ensembles show the motion directly."
+  - "Function often depends on motion (binding, catalysis, allostery); a static view can miss cryptic pockets and alternative states."
+references:
+  - "Protein dynamics and conformational ensembles are fundamental to structure-function (structural biology, canonical)."

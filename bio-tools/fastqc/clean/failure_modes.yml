@@ -1,7 +1,6 @@
 # CLEAN machine section (list). Each item validates against schemas.py:FailureMode.
-- id: java_oom
-  signal: "OutOfMemoryError"
-  fix: "Increase the JVM heap, e.g. `export _JAVA_OPTIONS=\"-Xmx4G\"`, then rerun."
+# NOTE: java_oom is NOT listed here — it is inherited from the `java` runtime trait
+# (shared/traits/runtime/java.yml) via manifest `runtimes: [java]`. Only tool-specific modes below.
 - id: malformed_fastq
   signal: "Failed to process"
   fix: "Input FASTQ is malformed/truncated. Validate integrity (record count multiple of 4, matching seq/qual lengths) before rerun."

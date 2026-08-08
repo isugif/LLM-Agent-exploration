@@ -101,7 +101,9 @@ Why the machine contract stays human:
 - **Fabrication is catastrophic** — a wrong boundary/precondition *defeats the safety purpose*.
 
 This is the premise's **human-curation loop**: the machine contract is curated judgment that becomes
-versioned contract entries, not auto-generated documentation.
+versioned contract entries, not auto-generated documentation. Much of that judgment is **shared and
+inheritable** — see [`docs/TRAITS.md`](TRAITS.md) (three-pillar traits): a Java tool inherits the
+OOM→`-Xmx` failure mode; biology/domain knowledge (introns, protein dynamics) is a reusable library.
 
 ### The HRR standard (Human Review Required)
 

@@ -37,9 +37,17 @@ unchanged.
   Enforces that the expert-judgment machine sections (preconditions/must_not_use/failure_modes) are
   human-reviewed before use. Existing reviewed tools (fastqc/multiqc) unaffected.
 
+- shared: **trait composition (three pillars).** Reusable traits in `shared/traits/` — runtime
+  (software) traits compose their `failure_modes` into a tool's contract via manifest `runtimes:`
+  (fastqc now inherits `java_oom` from `runtime/java.yml` instead of hardcoding it). Interpretive
+  biology/domain traits (eukaryote/prokaryote/protein-structure) are a validated knowledge library;
+  their consumption is deferred (BACKLOG). See `docs/TRAITS.md`.
+
 ### Verified
 - Deterministic suite 14 pass / 0 fail / 1 skip; both tracks still emit identical route/verdict.
 - HRR gate: a scaffolded tool (13 markers) is refused by both tracks; reviewed tools route normally.
+- Trait composition: fastqc inherits `java_oom` (4 failure_modes); multiqc (Python) inherits none; OOM
+  diagnosis unchanged.
 
 ## [0.2.0] — 2026-08-06
 
