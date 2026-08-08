@@ -199,6 +199,25 @@ drift-checker *after* the drift bit it). Add checks to `tests/`:
 
 ---
 
+## Use rustqc for FASTQ profiling (faster than the stdlib probe)
+
+**Status:** 💡 idea
+
+**What:** Swap/augment the pure-Python FASTQ profiler (`shared/probes/fastq_probe.py:probe` /
+`profile_fastq`, used by onboarding and the chat UI's `describe_data`) with
+[`rustqc`](https://github.com/) — a Rust FASTQ QC tool — for the ground-truth measurements.
+
+**Why it matters:** the stdlib probe samples the first N reads for speed, but a Rust reader can scan
+the **whole file** far faster, giving exact (not sampled) length/quality distributions and richer
+per-base metrics for the plots — with lower latency in the chat flow.
+
+**Rough shape:** add a `rustqc` probe behind the same interface (`profile_fastq`-shaped dict:
+facts + `length_hist` + `qual_by_pos`) so the UI/onboarding don't change; provision it via the curator
+(bioconda/cargo) and fall back to the stdlib probe when it's not installed. Compare outputs against the
+current probe to confirm parity before switching the default.
+
+---
+
 ## GitHub repos as an install + release-freshness source (integrate `repoReleases`)
 
 **Status:** 💡 idea

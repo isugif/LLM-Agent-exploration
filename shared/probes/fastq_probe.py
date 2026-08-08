@@ -89,6 +89,50 @@ def probe(path: str, sample_reads: int = 10000) -> dict[str, Any]:
     return facts
 
 
+def profile_fastq(path: str, sample_reads: int = 10000) -> dict[str, Any]:
+    """Richer profile for the UI: the ground-truth facts plus two plottable distributions.
+
+    Returns {"facts": <probe() output>, "length_hist": {len: count}, "qual_by_pos": [mean_q, ...]}.
+    Pure stdlib, sampled — same cost class as probe(). Non-FASTQ inputs yield empty distributions.
+    """
+    facts = probe(path, sample_reads=sample_reads)
+    if facts.get("format") != "fastq":
+        return {"facts": facts, "length_hist": {}, "qual_by_pos": []}
+
+    offset = 64 if facts.get("encoding_guess") == "phred64" else 33
+    length_hist: Counter = Counter()
+    pos_sum: list[int] = []
+    pos_cnt: list[int] = []
+    n = 0
+    with _open(path) as fh:
+        while n < sample_reads:
+            header = fh.readline()
+            if not header:
+                break
+            seq = fh.readline()
+            fh.readline()                        # '+' separator
+            qual = fh.readline()
+            if not qual:
+                break
+            seq = seq.rstrip("\n")
+            qual = qual.rstrip("\n")
+            length_hist[len(seq)] += 1
+            for i, c in enumerate(qual):
+                if i >= len(pos_sum):
+                    pos_sum.append(0)
+                    pos_cnt.append(0)
+                pos_sum[i] += ord(c) - offset
+                pos_cnt[i] += 1
+            n += 1
+
+    qual_by_pos = [round(s / c, 2) if c else 0.0 for s, c in zip(pos_sum, pos_cnt)]
+    return {
+        "facts": facts,
+        "length_hist": {int(k): int(v) for k, v in sorted(length_hist.items())},
+        "qual_by_pos": qual_by_pos,
+    }
+
+
 def _infer_layout_from_name(path: str) -> str:
     """Heuristic: filenames like *_1.fastq / *_R1.fastq suggest one mate of a pair.
 

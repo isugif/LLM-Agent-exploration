@@ -103,6 +103,23 @@ python -m langgraph_impl.run --tool multiqc --fastq <dir_of_fastqc_reports> \
 The LLM is only used for judgment-shaped steps; deterministic checks still run with Ollama off
 (the pipeline reports `llm_provider: null` and degrades gracefully).
 
+## Chat UI
+
+A split-screen web app (chat left, ground-truth **facts + plots** right) is the interactive front
+end. Type free text; an LLM classifies the request into a typed **Intent** and deterministic code
+dispatches — the model routes and narrates, it never produces the facts.
+
+```bash
+pip install -r requirements.txt          # adds fastapi + uvicorn
+python -m app                            # http://127.0.0.1:8000  (--port / --model to override)
+```
+
+Ask *"what can you tell me about `shared/data/SRR11140744_10k.fastq.gz`"* → the right panel fills with
+the measured facts (format, read-length min/max/mode, Phred encoding, SE/PE hint), a read-length
+histogram, and per-position quality. Pick **Ollama** or **Claude** in the model dropdown (Claude uses
+your local `claude` login — no API key). v1 wires the **describe_data** flow; other intents
+(propose-strategy, run-pipeline, add-tool) are classified but return a graceful "coming soon" stub.
+
 ## Tests
 
 ```bash

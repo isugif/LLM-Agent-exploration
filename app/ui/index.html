@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bio Chat — four-harness bioinformatician</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- LEFT: chat -->
+    <section class="chat" aria-label="chat">
+      <header class="chat-head">
+        <h1>Bio&nbsp;Chat</h1>
+        <label class="prov">model
+          <select id="provider">
+            <option value="auto">auto</option>
+            <option value="ollama">Ollama</option>
+            <option value="claude">Claude</option>
+          </select>
+        </label>
+      </header>
+
+      <div id="log" class="log">
+        <div class="msg assistant">
+          Ask me about a sequencing file — e.g.
+          <code>what can you tell me about shared/data/SRR11140744_10k.fastq.gz</code>
+        </div>
+      </div>
+
+      <form id="composer" class="composer">
+        <input id="file" class="file" type="text" placeholder="optional: /path/to/reads.fastq.gz" />
+        <div class="row">
+          <input id="message" class="message" type="text" autocomplete="off"
+                 placeholder="Tell me about the data…" />
+          <button id="send" type="submit">Send</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- RIGHT: data panel -->
+    <section class="panel" aria-label="data panel">
+      <div id="panel-empty" class="panel-empty">
+        The data profile — facts and plots — will appear here.
+      </div>
+      <div id="panel" class="panel-content" hidden></div>
+    </section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
