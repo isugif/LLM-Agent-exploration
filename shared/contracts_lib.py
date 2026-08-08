@@ -82,6 +82,32 @@ def load_contract(tool_id: str) -> dict[str, Any]:
     return contract
 
 
+def find_hrr_markers(node: Any) -> list[str]:
+    """Recursively collect any HRR_ ('human review required') markers in a contract's values.
+
+    A scaffolded-but-unreviewed machine section carries HRR_ placeholders; their presence means the
+    tool's enforceable contract hasn't been vetted by a human yet.
+    """
+    from shared.sections.scaffold import HRR
+
+    found: list[str] = []
+    if isinstance(node, str):
+        if HRR in node:
+            found.append(node)
+    elif isinstance(node, dict):
+        for v in node.values():
+            found.extend(find_hrr_markers(v))
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            found.extend(find_hrr_markers(v))
+    return found
+
+
+def is_reviewed(contract: dict[str, Any]) -> bool:
+    """True iff the assembled contract has no HRR_ markers (i.e. a human has vetted it)."""
+    return not find_hrr_markers(contract)
+
+
 def validate_contract(contract: dict[str, Any]) -> None:
     """Validate the assembled contract's machine sections against their pydantic schemas.
 

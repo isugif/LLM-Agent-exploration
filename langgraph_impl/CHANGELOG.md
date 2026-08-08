@@ -31,9 +31,15 @@ unchanged.
 - shared: fact-only CONTEXT section schemas (`output`, `usage`, `options`, `dependencies`, `source`)
   and clean examples — fastqc {install,input,output,usage,options,dependencies,source,citations},
   multiqc {input,install,citations}. Consumed by the curator; harness behavior unchanged.
+- shared: **HRR (human-review-required) gate.** New tools scaffold standardized machine-section
+  skeletons (`shared/sections/scaffold.py`) whose values are prefixed `HRR_`; judgment now REFUSES to
+  route a tool whose assembled contract still contains `HRR_` markers (`contracts_lib.is_reviewed`).
+  Enforces that the expert-judgment machine sections (preconditions/must_not_use/failure_modes) are
+  human-reviewed before use. Existing reviewed tools (fastqc/multiqc) unaffected.
 
 ### Verified
 - Deterministic suite 14 pass / 0 fail / 1 skip; both tracks still emit identical route/verdict.
+- HRR gate: a scaffolded tool (13 markers) is refused by both tracks; reviewed tools route normally.
 
 ## [0.2.0] — 2026-08-06
 

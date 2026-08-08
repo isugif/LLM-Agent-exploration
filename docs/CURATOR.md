@@ -82,6 +82,42 @@ Batching all sections into one prompt would cut per-tool input ~4× (in BACKLOG)
   hisat2 `-o` anchor leak, before grounding existed); author non-`--help` facts (install/citations)
   when no source provides them.
 
+## Machine sections vs context sections — the fact/judgment boundary
+
+The curator handles **only the fact half** of a tool's YAML. The enforceable **machine sections are
+human-curated**, on purpose.
+
+| | sections | source | who authors |
+|---|---|---|---|
+| **Context (facts)** | install, input, output, usage, options, dependencies, source, citations | tool `--help` / docs | **curator** (LLM, grounded, validated) |
+| **Machine (judgment)** | meta, execution, **preconditions, must_not_use, failure_modes** | expert judgment (not in `--help`) | **human** (curator does NOT fill these) |
+
+Why the machine contract stays human:
+- **Not in `--help`** — no source to transfer from; the no-fabrication guard would have nothing to
+  ground against.
+- **Expert judgment** — `must_not_use` ("don't use FastQC as cohort QC; it's not a trimmer") and
+  `preconditions` (what fails *silently*) are the bioinformatician knowledge the whole premise exists
+  to capture.
+- **Fabrication is catastrophic** — a wrong boundary/precondition *defeats the safety purpose*.
+
+This is the premise's **human-curation loop**: the machine contract is curated judgment that becomes
+versioned contract entries, not auto-generated documentation.
+
+### The HRR standard (Human Review Required)
+
+Creating a new tool lays down standardized **skeletons** for the 5 machine sections
+(`shared/sections/scaffold.py`), every value prefixed **`HRR_`**. The harness treats any `HRR_` marker
+in an assembled contract as "unreviewed" and **refuses to route the tool** until a human replaces the
+placeholders and removes the markers.
+
+- Detection: `shared/contracts_lib.py:is_reviewed / find_hrr_markers`.
+- Gate: the **first** check in both judgment harnesses → `refuse` with "pending human review".
+- Scaffolding: `write_machine_skeletons(tool)`; the curator's `bootstrap` calls it for new tools
+  (skips already-reviewed files).
+
+*Verified:* a scaffolded tool (13 `HRR_` markers) is refused by **both** tracks; reviewed tools
+(fastqc/multiqc) route normally; suite unchanged (14/0/1).
+
 ## Guardrails — the DB3 "anchor must not supply facts" defense (3 layers)
 
 DB3 (from the skill's `demos.md`): an anchor may shape *structure*, never a *fact*
