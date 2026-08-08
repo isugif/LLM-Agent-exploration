@@ -37,11 +37,12 @@ async function* sse(resp) {
   }
 }
 
-async function send(message, file, provider) {
+async function send(message, file, provider, signal) {
   const resp = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, file: file || null, provider }),
+    signal,
   });
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
 
@@ -80,12 +81,21 @@ async function send(message, file, provider) {
         addActivity("done", "done");
       }
     }
+  } catch (e) {
+    if (e.name === "AbortError") {
+      thinking.classList.remove("thinking");
+      thinking.textContent = "⏹ Stopped. (the server may finish this step in the background)";
+    }
+    throw e;
   } finally {
     endWork();
   }
 }
 
 function stageLine(ev) {
+  if (ev.stage === "docs_check") {
+    return ev.title + " — " + ((ev.missing && ev.missing.length) ? ev.missing.length + " missing" : "complete");
+  }
   const extra = ev.action || ev.status || (ev.installed === false ? "blocked" : "") ||
     (ev.section ? ev.status : "");
   return ev.title + (extra ? " — " + extra : "");
@@ -136,6 +146,8 @@ function termStage(ev) {
   if (ev.stage === "provision") {
     term(ev.method ? "$ " + ev.method : `[provision] installed=${ev.installed}`);
     if (ev.reason) term("  " + ev.reason);
+  } else if (ev.stage === "docs_check") {
+    term(`[docs] have=${(ev.have || []).join(",") || "-"} missing=${(ev.missing || []).join(",") || "-"}`);
   } else if (ev.stage === "source") {
     term(`[source] ${ev.chars} chars of --help${ev.url ? " + docs" : ""}`);
   } else if (ev.stage === "curate") {
@@ -158,6 +170,8 @@ function renderPanel(p) {
   panel.hidden = false;
   panel.innerHTML = "";
   panel.dataset.mode = "profile";
+
+  if (p.kind === "tool") { renderToolPanel(p); return; }
 
   const h = document.createElement("div");
   h.innerHTML = `<h2>Data profile</h2><div class="file-name">${esc(p.file || "")}</div>`;
@@ -190,6 +204,34 @@ function renderPanel(p) {
   if (p.qual_by_pos && p.qual_by_pos.length) {
     panel.appendChild(card("Mean quality by position", lineChart(p.qual_by_pos)));
   }
+}
+
+// ---- tool documentation panel (explain_tool / RAG) ----
+function renderToolPanel(p) {
+  const head = document.createElement("div");
+  const rev = p.reviewed ? "" : ` · <span class="warn">contract pending review</span>`;
+  head.innerHTML = `<h2>${esc(p.tool)}${p.version ? " " + esc(p.version) : ""}</h2>
+    <div class="file-name">documented tool${rev}</div>`;
+  panel.appendChild(head);
+
+  if (p.summary) panel.appendChild(card("Summary", `<p>${esc(p.summary)}</p>`));
+
+  if (p.usage && p.usage.length) {
+    const rows = p.usage.map((e) =>
+      `<div class="usage-ex"><div class="ux-desc">${esc(e.description || "")}</div>` +
+      `<code>${esc(e.command || "")}</code></div>`).join("");
+    panel.appendChild(card("Usage", rows));
+  }
+  if (p.options && p.options.length) {
+    const rows = p.options.map((o) =>
+      `<tr><td class="k">${esc(o.flag)}</td><td class="v">${esc(o.description || "")}` +
+      `${o.default ? ` <span class="muted">(default ${esc(o.default)})</span>` : ""}</td></tr>`).join("");
+    panel.appendChild(card(`Parameters (${p.options.length})`, `<table class="facts"><tbody>${rows}</tbody></table>`));
+  }
+  if (p.boundaries && p.boundaries.length) {
+    panel.appendChild(card("Off-label boundaries", list(p.boundaries)));
+  }
+  if (p.citation) panel.appendChild(card("Citation", `<code>${esc(p.citation)}</code>`));
 }
 
 // ---- pipeline stage timeline (run_pipeline) ----
@@ -234,6 +276,12 @@ function stageCard(ev) {
     } else {
       body = `<span class="badge badge-bad">blocked</span><p class="warn">${esc(ev.reason || "")}</p>`;
     }
+  } else if (ev.stage === "docs_check") {
+    const miss = ev.missing || [];
+    body = miss.length
+      ? `<span class="badge badge-warn">missing</span><p>Creating docs: ${esc(miss.join(", "))}</p>` +
+        (ev.have && ev.have.length ? `<p class="ok">Already present: ${esc(ev.have.join(", "))}</p>` : "")
+      : `<span class="badge badge-ok">complete</span><p class="ok">All section docs already exist.</p>`;
   } else if (ev.stage === "source") {
     body = `<p>${esc(fmt(ev.chars))} chars of --help${ev.url ? " + docs" : ""} captured.</p>`;
   } else if (ev.stage === "curate") {
@@ -374,9 +422,17 @@ $("message").addEventListener("keydown", (e) => {
   }
 });
 
-// ---- wire up ----
+// ---- wire up (Send doubles as Stop while a request is in flight) ----
+let inFlight = false;
+let abortCtrl = null;
+function setStopMode(on) {
+  const b = $("send");
+  b.textContent = on ? "Stop" : "Send";
+  b.classList.toggle("stop", on);
+}
 $("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (inFlight) { if (abortCtrl) abortCtrl.abort(); return; }   // button is "Stop"
   const msg = $("message").value.trim();
   if (!msg) return;
   const file = $("file").value.trim();
@@ -386,8 +442,12 @@ $("composer").addEventListener("submit", async (e) => {
   addMsg(msg, "user");
   addActivity("▸ " + msg, "turn");
   $("message").value = "";
-  $("send").disabled = true;
-  try { await send(msg, file, provider); }
-  catch (err) { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }
-  finally { $("send").disabled = false; $("message").focus(); }
+  inFlight = true; setStopMode(true);
+  abortCtrl = new AbortController();
+  try { await send(msg, file, provider, abortCtrl.signal); }
+  catch (err) {
+    if (err.name === "AbortError") { addActivity("stopped by user", "err"); }
+    else { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }
+  }
+  finally { inFlight = false; setStopMode(false); abortCtrl = null; $("message").focus(); }
 });

@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 
 from shared.llm.provider import get_provider
 from app.intent import classify, stub_text
-from app.capabilities import describe_data, run_pipeline, add_tool
+from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool
 
 
 class ChatRequest(BaseModel):
@@ -108,10 +108,9 @@ def make_chat_router() -> APIRouter:
                         {"text": "Which tool should I install? e.g. \"install seqkit\"."}))
                 else:
                     yield _sse("log", json.dumps({"text": f"Installing + documenting {tool}…"}))
-                    yield _sse("plan", json.dumps({"steps": add_tool.plan()}))
-                    installed = False
-                    version = None
-                    markers = 0
+                    yield _sse("plan", json.dumps({"steps": add_tool.plan_for(tool)}))
+                    installed, version, markers = False, None, 0
+                    created, already = [], False
                     async for kind, payload in _abridge(
                             lambda: add_tool.stage_events(tool, req.provider or "auto")):
                         if kind == "error":
@@ -121,11 +120,27 @@ def make_chat_router() -> APIRouter:
                         stage, data = payload
                         if stage == "provision":
                             installed, version = data.get("installed", False), data.get("version")
-                        if stage == "hrr_gate":
+                        elif stage == "docs_check":
+                            already = not data.get("missing")
+                        elif stage == "curate" and data.get("status") == "valid":
+                            created.append(data.get("section"))
+                        elif stage == "hrr_gate":
                             markers = data.get("markers", 0)
                         yield _sse("stage", json.dumps(add_tool.to_event(stage, data)))
                     yield _sse("prose", json.dumps(
-                        {"text": add_tool.summary_line(tool, installed, version, markers)}))
+                        {"text": add_tool.summary_line(tool, installed, version, markers, created, already)}))
+
+            elif intent.intent == "explain_tool":
+                tool = (intent.tool or "").strip().lower()
+                if not tool or tool == "unknown":
+                    yield _sse("prose", json.dumps(
+                        {"text": "Which tool? e.g. \"tell me about fastqc\"."}))
+                else:
+                    yield _sse("log", json.dumps({"text": f"Looking up {tool} documentation…"}))
+                    result = await run_in_threadpool(explain_tool.run, req.message, tool, provider)
+                    if result.get("panel") is not None:
+                        yield _sse("panel", json.dumps(result["panel"]))
+                    yield _sse("prose", json.dumps({"text": result.get("prose", "")}))
 
             else:
                 yield _sse("prose", json.dumps({"text": stub_text(intent)}))

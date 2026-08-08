@@ -65,6 +65,7 @@ body {
   padding: 0 16px; font-weight: 600; cursor: pointer;
 }
 .composer button:disabled { opacity: .5; cursor: default; }
+.composer button.stop { background: #f85149; color: #fff; }
 .composer .hint { color: #5b6672; font-size: 11px; }
 
 /* ---- data panel (right) ---- */
@@ -112,6 +113,12 @@ table.facts td.k { color: var(--muted); width: 45%; }
 table.facts td.v { font-variant-numeric: tabular-nums; }
 
 .warn { color: var(--warn); }
+.muted { color: var(--muted); }
+.usage-ex { margin-bottom: 10px; }
+.usage-ex:last-child { margin-bottom: 0; }
+.ux-desc { color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+.usage-ex code { display: block; background: #0b0f14; border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 9px; font-size: 12px; overflow-x: auto; }
 .chip { display: inline-block; background: rgba(227,179,65,.12); border: 1px solid var(--warn);
   color: var(--warn); border-radius: 999px; padding: 3px 10px; margin: 3px 4px 0 0; font-size: 12px; }
 .ok { color: var(--muted); }

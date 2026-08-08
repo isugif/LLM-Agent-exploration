@@ -14,17 +14,20 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-IntentName = Literal["describe_data", "propose_strategy", "run_pipeline", "add_tool", "other"]
+IntentName = Literal["describe_data", "explain_tool", "propose_strategy", "run_pipeline",
+                     "add_tool", "other"]
 
 # A FASTQ path mentioned in free text (non-capturing group so findall returns the whole match).
 FASTQ_RE = re.compile(r"\S+\.(?:fastq|fq)(?:\.gz)?", re.IGNORECASE)
 
 _SYSTEM = (
     "You classify a scientist's bioinformatics request into one intent and extract only what is "
-    "explicitly stated (use 'unknown' otherwise). Intents: "
-    "describe_data (inspect/summarize a data file), "
+    "explicitly stated (use 'unknown' otherwise). Set `tool` to the program named, if any. Intents: "
+    "describe_data (inspect/summarize a DATA FILE, e.g. a FASTQ), "
+    "explain_tool (a question ABOUT a tool/program itself: what it does, how to run it, its "
+    "parameters/options — set `tool`), "
     "propose_strategy (what analysis could I do), "
-    "run_pipeline (actually run a tool/workflow), "
+    "run_pipeline (actually run a tool on a file), "
     "add_tool (install/add a tool), other."
 )
 
@@ -46,9 +49,15 @@ _KNOWN_TOOLS = ("fastqc", "multiqc", "hisat2", "star")
 _ADD_RE = re.compile(r"\b(?:install|add(?:\s+the)?(?:\s+tool)?)\s+([A-Za-z0-9][\w.\-]+)", re.IGNORECASE)
 
 
+def _documented_tools() -> list[str]:
+    """Tools that have a curated workbook (for offline explain_tool detection)."""
+    from app.capabilities.explain_tool import available_tools
+    return available_tools()
+
+
 def _heuristic(message: str) -> Intent:
-    """LLM-off fallback: 'run' + a FASTQ => run_pipeline; 'install X' => add_tool; a FASTQ alone
-    => describe_data; else other."""
+    """LLM-off fallback: 'run' + FASTQ => run_pipeline; 'install X' => add_tool; a documented tool
+    name (no file) => explain_tool; a FASTQ alone => describe_data; else other."""
     files = FASTQ_RE.findall(message)
     low = message.lower()
     if files and re.search(r"\brun\b", low):
@@ -57,6 +66,10 @@ def _heuristic(message: str) -> Intent:
     m = _ADD_RE.search(message)
     if m and not files:
         return Intent(intent="add_tool", tool=m.group(1).lower(), confidence=0.3)
+    if not files:
+        named = next((t for t in _documented_tools() if re.search(rf"\b{re.escape(t)}\b", low)), None)
+        if named:
+            return Intent(intent="explain_tool", tool=named, confidence=0.3)
     return Intent(intent="describe_data" if files else "other", files=files, confidence=0.3)
 
 

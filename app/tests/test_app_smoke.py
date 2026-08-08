@@ -72,8 +72,40 @@ def test_add_tool_event_mapping():
     assert ev["stage"] == "curate" and ev["title"] == "Curate: usage"
     gate = at.to_event("hrr_gate", {"tool": "seqkit", "markers": 13, "reviewed": False})
     assert gate["title"] == "Human-review gate" and gate["markers"] == 13
-    assert "not runnable" in at.summary_line("seqkit", True, "2.13.0", 13)
-    assert "couldn't install" in at.summary_line("nope", False, None, 0)
+    assert "not runnable" in at.summary_line("seqkit", True, "2.13.0", 13, ["usage", "options"], False)
+    assert "couldn't install" in at.summary_line("nope", False, None, 0, [], False)
+
+
+def test_intent_explain_tool_offline():
+    null = NullProvider()
+    assert classify("tell me about fastqc", null).intent == "explain_tool"
+    assert classify("tell me about fastqc", null).tool == "fastqc"
+    assert classify("what parameters does fastqc have?", null).intent == "explain_tool"
+    # a run/install request still wins over explain
+    assert classify("install fastqc", null).intent == "add_tool"
+
+
+def test_explain_tool_workbook_and_run():
+    from app.capabilities import explain_tool as et
+    assert "fastqc" in et.available_tools()
+    wb = et.load_workbook("fastqc")
+    assert wb and wb["sections"].get("meta")
+    assert et.load_workbook("nope_xyz") is None
+    out = et.run("what parameters does it have?", "fastqc", NullProvider())
+    assert out["panel"]["kind"] == "tool"
+    assert len(out["panel"]["options"]) > 0            # parameters surfaced
+    assert out["panel"]["boundaries"]                  # off-label boundaries present
+
+
+def test_add_tool_docs_check_plan():
+    from app.capabilities import add_tool as at
+    # fastqc already documented -> no source/curate steps in the plan
+    p = at.plan_for("fastqc")
+    assert "source" not in p and not any(s.startswith("curate:") for s in p)
+    assert at._missing("fastqc", ["usage", "options"]) == []
+    # an undocumented tool -> every section missing
+    assert at._missing("nope_xyz", ["usage", "options"]) == ["usage", "options"]
+    assert "already installed and documented" in at.summary_line("fastqc", True, "0.12.1", 0, [], True)
 
 
 def test_run_pipeline_event_mapping():
