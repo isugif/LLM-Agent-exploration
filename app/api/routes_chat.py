@@ -20,14 +20,16 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from shared.llm.provider import get_provider
+from app import resolve
 from app.intent import classify, stub_text
-from app.capabilities import describe_data, run_pipeline, add_tool
+from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool
 
 
 class ChatRequest(BaseModel):
     message: str
     provider: str | None = None            # 'ollama' | 'claude' | 'auto'/None
     file: str | None = None                # optional explicit file path from the UI
+    history: list[dict] = []               # prior turns [{role, content}] for context (memory)
 
 
 def _sse(event: str, data: str) -> str:
@@ -62,13 +64,28 @@ def make_chat_router() -> APIRouter:
     @router.post("/api/chat")
     async def chat(req: ChatRequest):
         provider = get_provider(req.provider)
-        intent = await run_in_threadpool(classify, req.message, provider)
-        file = req.file or (intent.files[0] if intent.files else None)
 
         async def gen():
+            yield _sse("log", json.dumps({"text": f"Classifying request (model: {provider.name})…"}))
+            intent = await run_in_threadpool(classify, req.message, provider, req.history)
+            if req.file and not intent.files:            # explicit UI file field
+                intent.files = [req.file]
+            notes = resolve.resolve(intent, req.message, req.history)   # deterministic grounding
             yield _sse("meta", json.dumps({"provider": provider.name, "intent": intent.intent}))
+            for n in notes:
+                yield _sse("log", json.dumps({"text": f"grounded: {n}"}))
+
+            # uniform clarifying question when a required slot could not be resolved
+            slot = resolve.missing_slot(intent)
+            if slot:
+                yield _sse("prose", json.dumps({"text": resolve.ask_text(slot)}))
+                yield _sse("done", "{}")
+                return
+
+            file = intent.files[0] if intent.files else None
 
             if intent.intent == "describe_data":
+                yield _sse("log", json.dumps({"text": f"Profiling {file}…"}))
                 result = await run_in_threadpool(describe_data.run, req.message, file, provider)
                 if result.get("panel") is not None:
                     yield _sse("panel", json.dumps(result["panel"]))
@@ -76,50 +93,55 @@ def make_chat_router() -> APIRouter:
 
             elif intent.intent == "run_pipeline":
                 tool = intent.tool if intent.tool and intent.tool != "unknown" else "fastqc"
-                if not file:
-                    yield _sse("prose", json.dumps(
-                        {"text": "Which file should I run it on? Give me a FASTQ path."}))
-                else:
-                    action = verdict_status = None
-                    async for kind, payload in _abridge(
-                            lambda: run_pipeline.stage_events(req.message, tool, file)):
-                        if kind == "error":
-                            yield _sse("stage", json.dumps(
-                                {"stage": "error", "title": "Error", "error": payload}))
-                            continue
-                        stage, delta = payload
-                        ev = run_pipeline.to_event(stage, delta)
-                        if ev["stage"] == "judgment":
-                            action = ev.get("action")
-                        if ev["stage"] in ("evaluation", "diagnosis"):
-                            verdict_status = ev.get("status")
-                        yield _sse("stage", json.dumps(ev))
-                    yield _sse("prose", json.dumps(
-                        {"text": run_pipeline.summary_line(action, verdict_status, tool)}))
+                yield _sse("log", json.dumps({"text": f"Running {tool} on {file}…"}))
+                yield _sse("plan", json.dumps({"steps": run_pipeline.PLAN}))
+                action = verdict_status = None
+                async for kind, payload in _abridge(
+                        lambda: run_pipeline.stage_events(req.message, tool, file, req.provider or "auto")):
+                    if kind == "error":
+                        yield _sse("stage", json.dumps({"stage": "error", "title": "Error", "error": payload}))
+                        continue
+                    stage, delta = payload
+                    ev = run_pipeline.to_event(stage, delta)
+                    if ev["stage"] == "judgment":
+                        action = ev.get("action")
+                    if ev["stage"] in ("evaluation", "diagnosis"):
+                        verdict_status = ev.get("status")
+                    yield _sse("stage", json.dumps(ev))
+                yield _sse("prose", json.dumps(
+                    {"text": run_pipeline.summary_line(action, verdict_status, tool)}))
 
             elif intent.intent == "add_tool":
-                tool = (intent.tool or "").strip().lower()
-                if not tool or tool == "unknown":
-                    yield _sse("prose", json.dumps(
-                        {"text": "Which tool should I install? e.g. \"install seqkit\"."}))
-                else:
-                    installed = False
-                    version = None
-                    markers = 0
-                    async for kind, payload in _abridge(
-                            lambda: add_tool.stage_events(tool, req.provider or "auto")):
-                        if kind == "error":
-                            yield _sse("stage", json.dumps(
-                                {"stage": "error", "title": "Error", "error": payload}))
-                            continue
-                        stage, data = payload
-                        if stage == "provision":
-                            installed, version = data.get("installed", False), data.get("version")
-                        if stage == "hrr_gate":
-                            markers = data.get("markers", 0)
-                        yield _sse("stage", json.dumps(add_tool.to_event(stage, data)))
-                    yield _sse("prose", json.dumps(
-                        {"text": add_tool.summary_line(tool, installed, version, markers)}))
+                tool = intent.tool.strip().lower()
+                yield _sse("log", json.dumps({"text": f"Installing + documenting {tool}…"}))
+                yield _sse("plan", json.dumps({"steps": add_tool.plan_for(tool)}))
+                installed, version, markers = False, None, 0
+                created, already = [], False
+                async for kind, payload in _abridge(
+                        lambda: add_tool.stage_events(tool, req.provider or "auto")):
+                    if kind == "error":
+                        yield _sse("stage", json.dumps({"stage": "error", "title": "Error", "error": payload}))
+                        continue
+                    stage, data = payload
+                    if stage == "provision":
+                        installed, version = data.get("installed", False), data.get("version")
+                    elif stage == "docs_check":
+                        already = not data.get("missing")
+                    elif stage == "curate" and data.get("status") == "valid":
+                        created.append(data.get("section"))
+                    elif stage == "hrr_gate":
+                        markers = data.get("markers", 0)
+                    yield _sse("stage", json.dumps(add_tool.to_event(stage, data)))
+                yield _sse("prose", json.dumps(
+                    {"text": add_tool.summary_line(tool, installed, version, markers, created, already)}))
+
+            elif intent.intent == "explain_tool":
+                tool = intent.tool.strip().lower()
+                yield _sse("log", json.dumps({"text": f"Looking up {tool} documentation…"}))
+                result = await run_in_threadpool(explain_tool.run, req.message, tool, provider, req.history)
+                if result.get("panel") is not None:
+                    yield _sse("panel", json.dumps(result["panel"]))
+                yield _sse("prose", json.dumps({"text": result.get("prose", "")}))
 
             else:
                 yield _sse("prose", json.dumps({"text": stub_text(intent)}))

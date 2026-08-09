@@ -15,13 +15,19 @@ from typing import Iterator, Optional
 from langgraph_impl.graph import build_graph
 
 # max stdout/stderr tail kept in an execution event (full logs stay in the audit record on disk)
-_TAIL = 600
+_TAIL = 4000
+
+# expected stages, for the UI progress bar (a refusal short-circuits after judgment; `done` completes it)
+PLAN = ["onboarding", "judgment", "execution", "evaluation"]
 
 
-def stage_events(message: str, tool: str, file: str) -> Iterator[tuple[str, dict]]:
-    """Blocking generator: yield (node_name, delta) as the pipeline runs."""
+def stage_events(message: str, tool: str, file: str,
+                 provider: str = "auto") -> Iterator[tuple[str, dict]]:
+    """Blocking generator: yield (node_name, delta) as the pipeline runs. `provider` selects the LLM
+    each harness node uses (onboarding/judgment/evaluation), honoring the UI dropdown."""
     graph = build_graph()
-    state = {"tool": tool, "fastq": file, "question": message, "deliverable": message}
+    state = {"tool": tool, "fastq": file, "question": message, "deliverable": message,
+             "provider": provider}
     for update in graph.stream(state):
         for node, delta in update.items():
             yield node, delta

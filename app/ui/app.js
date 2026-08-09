@@ -5,13 +5,101 @@ const log = $("log");
 const panel = $("panel");
 const panelEmpty = $("panel-empty");
 
-function addMsg(text, who, cls) {
-  const div = document.createElement("div");
-  div.className = "msg " + who + (cls ? " " + cls : "");
-  div.textContent = text;
-  log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
-  return div;
+// ---- per-question turns: each captures its own Output / Activity / Terminal ----
+let turns = [];      // {q, out:[htmlCard], mode, act:[{ts,kind,text}], term:[str]}
+let view = -1;       // which turn is displayed
+let stream = -1;     // which turn is receiving live events
+
+function startTurn(q) {
+  turns.push({ q, out: [], mode: null, act: [], term: [] });
+  stream = turns.length - 1;
+  const opt = document.createElement("option");
+  opt.value = String(stream);
+  opt.textContent = `${stream + 1}. ${q.slice(0, 44)}`;
+  $("turn-select").appendChild(opt);
+  showTurn(stream);
+}
+
+function showTurn(i) {
+  if (i < 0 || i >= turns.length) return;
+  view = i;
+  const t = turns[i];
+  if (t.out.length) { panelEmpty.hidden = true; panel.hidden = false; panel.innerHTML = t.out.join(""); }
+  else { panelEmpty.hidden = false; panel.hidden = true; panel.innerHTML = ""; }
+  const af = $("activity");
+  af.innerHTML = t.act.length ? t.act.map(actHTML).join("")
+    : '<div class="act-empty">Activity for this question appears here.</div>';
+  af.scrollTop = af.scrollHeight;
+  const term = $("terminal");
+  term.textContent = t.term.length ? t.term.join("\n") + "\n" : "";
+  term.scrollTop = term.scrollHeight;
+  $("turn-select").value = String(i);
+}
+
+// ---- output (Output tab) — string-based, stored per turn ----
+function setOutput(html, mode) {
+  const t = turns[stream]; if (!t) return;
+  t.out = [html]; t.mode = mode || "profile";
+  if (view === stream) { panelEmpty.hidden = true; panel.hidden = false; panel.innerHTML = html; }
+}
+function appendOutput(html) {
+  const t = turns[stream]; if (!t) return;
+  t.out.push(html);
+  if (view === stream) { panelEmpty.hidden = true; panel.hidden = false; panel.insertAdjacentHTML("beforeend", html); }
+}
+function appendStage(ev) {
+  const t = turns[stream]; if (!t) return;
+  if (t.mode !== "pipeline") {
+    appendOutput(`<div class="run-head"><h2>Pipeline / install</h2><div class="file-name">four-harness flow</div></div>`);
+    t.mode = "pipeline";
+  }
+  appendOutput(stageCardHTML(ev));
+}
+
+// ---- activity (Activity tab), stored per turn ----
+function actHTML(l) {
+  return `<div class="act-line act-${l.kind}"><span class="ts">${l.ts}</span>` +
+    `<span class="act-text">${esc(l.text)}</span></div>`;
+}
+function addActivity(text, kind) {
+  const t = turns[stream]; if (!t) return;
+  const line = { ts: new Date().toLocaleTimeString([], { hour12: false }), kind: kind || "info", text };
+  t.act.push(line);
+  if (view === stream) {
+    const af = $("activity"); const e = af.querySelector(".act-empty"); if (e) e.remove();
+    af.insertAdjacentHTML("beforeend", actHTML(line)); af.scrollTop = af.scrollHeight;
+    if (currentTab !== "activity") $("act-badge").hidden = false;
+  }
+}
+
+// ---- terminal (Terminal tab), stored per turn ----
+function term(line) {
+  const t = turns[stream]; if (!t) return;
+  t.term.push(line);
+  if (view === stream) {
+    const el = $("terminal"); el.appendChild(document.createTextNode(line + "\n")); el.scrollTop = el.scrollHeight;
+  }
+}
+function termStage(ev) {
+  if (ev.stage === "provision") {
+    term(ev.method ? "$ " + ev.method : `[provision] installed=${ev.installed}`);
+    if (ev.reason) term("  " + ev.reason);
+  } else if (ev.stage === "docs_check") {
+    term(`[docs] have=${(ev.have || []).join(",") || "-"} missing=${(ev.missing || []).join(",") || "-"}`);
+  } else if (ev.stage === "source") {
+    term(`[source] ${ev.chars} chars of --help${ev.url ? " + docs" : ""}`);
+  } else if (ev.stage === "curate") {
+    term(`[curate:${ev.section}] ${ev.status} (items=${ev.items}, fixes=${ev.fixes})`);
+  } else if (ev.stage === "execution") {
+    term(`[execution] exit=${ev.exit_code}`);
+    if (ev.stderr_tail) term(ev.stderr_tail.trimEnd());
+    if (ev.error) term("ERROR: " + ev.error);
+  } else if (ev.stage === "evaluation" || ev.stage === "diagnosis") {
+    term(`[${ev.stage}] ${ev.status}`);
+    (ev.findings || []).forEach((f) => term("  - " + f));
+  } else {
+    term(`[${ev.stage}] ${ev.title || ""}`);
+  }
 }
 
 // ---- SSE-over-fetch: POST then parse the text/event-stream body ----
@@ -37,88 +125,158 @@ async function* sse(resp) {
   }
 }
 
-async function send(message, file, provider) {
+let convo = [];   // [{role, content}] conversation memory (a bounded window is sent each turn)
+
+function addMsg(text, who, cls) {
+  const div = document.createElement("div");
+  div.className = "msg " + who + (cls ? " " + cls : "");
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+async function send(message, file, provider, signal, history) {
   const resp = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, file: file || null, provider }),
+    body: JSON.stringify({ message, file: file || null, provider, history: history || [] }),
+    signal,
   });
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
 
   const thinking = addMsg("…", "assistant", "thinking");
-  for await (const { event, data } of sse(resp)) {
-    if (event === "panel") {
-      renderPanel(JSON.parse(data));
-    } else if (event === "stage") {
-      renderStage(JSON.parse(data));
-    } else if (event === "prose") {
-      thinking.classList.remove("thinking");
-      thinking.textContent = JSON.parse(data).text;
-      log.scrollTop = log.scrollHeight;
+  startWork();
+  let planSteps = null;
+  try {
+    for await (const { event, data } of sse(resp)) {
+      if (event === "meta") {
+        const m = JSON.parse(data);
+        addActivity(`intent: ${m.intent} · model: ${m.provider}`, "meta");
+        term(`[meta] intent=${m.intent} model=${m.provider}`);
+      } else if (event === "plan") {
+        planSteps = JSON.parse(data).steps;
+        setProgressTotal(planSteps.length);
+      } else if (event === "log") {
+        const t = JSON.parse(data).text;
+        addActivity(t, "think"); setThinking(thinking, t); term("… " + t);
+      } else if (event === "panel") {
+        const p = JSON.parse(data);
+        setOutput(p.kind === "tool" ? toolPanelHTML(p) : dataPanelHTML(p), p.kind === "tool" ? "tool" : "profile");
+        addActivity(p.kind === "tool" ? "documentation ready" : "data profile ready", "ok");
+      } else if (event === "stage") {
+        const ev = JSON.parse(data);
+        appendStage(ev);
+        addActivity(stageLine(ev), "stage");
+        setThinking(thinking, stageLine(ev));
+        advanceProgress(ev, planSteps);
+        termStage(ev);
+      } else if (event === "prose") {
+        const t = JSON.parse(data).text;
+        thinking.classList.remove("thinking");
+        thinking.textContent = t;
+        log.scrollTop = log.scrollHeight;
+        term("[response] " + t);
+        convo.push({ role: "assistant", content: t });
+        if (convo.length > 40) convo = convo.slice(-40);
+      } else if (event === "done") {
+        addActivity("done", "done");
+      }
     }
+  } catch (e) {
+    if (e.name === "AbortError") {
+      thinking.classList.remove("thinking");
+      thinking.textContent = "⏹ Stopped. (the server may finish this step in the background)";
+    }
+    throw e;
+  } finally {
+    endWork();
   }
 }
 
-// ---- right-hand data panel ----
-function renderPanel(p) {
-  panelEmpty.hidden = true;
-  panel.hidden = false;
-  panel.innerHTML = "";
-  panel.dataset.mode = "profile";
-
-  const h = document.createElement("div");
-  h.innerHTML = `<h2>Data profile</h2><div class="file-name">${esc(p.file || "")}</div>`;
-  panel.appendChild(h);
-
-  if (p.error) {
-    panel.appendChild(card("Error", `<span class="warn">${esc(p.error)}</span>`));
-    return;
+function stageLine(ev) {
+  if (ev.stage === "docs_check") {
+    return ev.title + " — " + ((ev.missing && ev.missing.length) ? ev.missing.length + " missing" : "complete");
   }
+  const extra = ev.action || ev.status || (ev.installed === false ? "blocked" : "") ||
+    (ev.section ? ev.status : "");
+  return ev.title + (extra ? " — " + extra : "");
+}
 
-  // facts table
-  const rows = (p.facts || []).map(
-    (r) => `<tr><td class="k">${esc(r.label)}</td><td class="v">${esc(fmt(r.value))}</td></tr>`
-  ).join("");
-  panel.appendChild(card("Measured facts", `<table class="facts"><tbody>${rows}</tbody></table>`));
+// ---- working state: progress bar + live "current step" spinner in the chat bubble ----
+function setThinking(bubble, text) {
+  bubble.classList.add("thinking");
+  bubble.innerHTML = `<span class="spin"></span><span class="cur"></span>`;
+  bubble.querySelector(".cur").textContent = text;
+  log.scrollTop = log.scrollHeight;
+}
+function startWork() {
+  const p = $("progress"), f = $("progress-fill");
+  p.hidden = false; p.classList.add("indeterminate"); f.style.width = "0%";
+  p.dataset.total = "0"; p.dataset.done = "0";
+}
+function setProgressTotal(n) { $("progress").classList.remove("indeterminate"); $("progress").dataset.total = String(n); }
+function advanceProgress(ev, planSteps) {
+  if (!planSteps) return;
+  const key = ev.section ? `curate:${ev.section}` : ev.stage;
+  const idx = planSteps.indexOf(key);
+  const p = $("progress");
+  const done = idx >= 0 ? idx + 1 : Number(p.dataset.done || 0);
+  p.dataset.done = String(done);
+  $("progress-fill").style.width = Math.round((done / planSteps.length) * 100) + "%";
+}
+function endWork() {
+  const p = $("progress"), f = $("progress-fill");
+  p.classList.remove("indeterminate");
+  f.style.width = "100%";
+  setTimeout(() => { p.hidden = true; f.style.width = "0%"; }, 500);
+}
 
-  // disagreements (declared vs measured)
+// ---- output HTML builders (return strings; stored per turn) ----
+function dataPanelHTML(p) {
+  let h = `<div><h2>Data profile</h2><div class="file-name">${esc(p.file || "")}</div></div>`;
+  if (p.error) return h + cardHTML("Error", `<span class="warn">${esc(p.error)}</span>`);
+  const rows = (p.facts || []).map((r) =>
+    `<tr><td class="k">${esc(r.label)}</td><td class="v">${esc(fmt(r.value))}</td></tr>`).join("");
+  h += cardHTML("Measured facts", `<table class="facts"><tbody>${rows}</tbody></table>`);
   if (p.disagreements && p.disagreements.length) {
-    const chips = p.disagreements.map((d) => `<span class="chip">⚠ ${esc(d)}</span>`).join("");
-    panel.appendChild(card("Needs a double-check", chips));
+    h += cardHTML("Needs a double-check", chips(p.disagreements));
   } else if (p.declared && Object.keys(p.declared).length) {
-    panel.appendChild(card("Declared vs measured",
-      `<span class="ok">No conflicts between what you stated and what was measured.</span>`));
+    h += cardHTML("Declared vs measured",
+      `<span class="ok">No conflicts between what you stated and what was measured.</span>`);
   }
-
-  // plots
-  if (p.length_hist && Object.keys(p.length_hist).length) {
-    panel.appendChild(card("Read-length distribution", barChart(p.length_hist)));
-  }
-  if (p.qual_by_pos && p.qual_by_pos.length) {
-    panel.appendChild(card("Mean quality by position", lineChart(p.qual_by_pos)));
-  }
+  if (p.length_hist && Object.keys(p.length_hist).length) h += cardHTML("Read-length distribution", barChart(p.length_hist));
+  if (p.qual_by_pos && p.qual_by_pos.length) h += cardHTML("Mean quality by position", lineChart(p.qual_by_pos));
+  return h;
 }
 
-// ---- pipeline stage timeline (run_pipeline) ----
-function renderStage(ev) {
-  panelEmpty.hidden = true;
-  panel.hidden = false;
-  if (panel.dataset.mode !== "pipeline") {          // first stage of a run -> reset
-    panel.innerHTML = `<h2>Pipeline run</h2><div class="file-name">four-harness flow</div>
-      <div id="stages"></div>`;
-    panel.dataset.mode = "pipeline";
+function toolPanelHTML(p) {
+  const rev = p.reviewed ? "" : ` · <span class="warn">contract pending review</span>`;
+  let h = `<div><h2>${esc(p.tool)}${p.version ? " " + esc(p.version) : ""}</h2>
+    <div class="file-name">documented tool${rev}</div></div>`;
+  if (p.summary) h += cardHTML("Summary", `<p>${esc(p.summary)}</p>`);
+  if (p.usage && p.usage.length) {
+    h += cardHTML("Usage", p.usage.map((e) =>
+      `<div class="usage-ex"><div class="ux-desc">${esc(e.description || "")}</div><code>${esc(e.command || "")}</code></div>`).join(""));
   }
-  document.getElementById("stages").appendChild(stageCard(ev));
+  if (p.options && p.options.length) {
+    const rows = p.options.map((o) =>
+      `<tr><td class="k">${esc(o.flag)}</td><td class="v">${esc(o.description || "")}` +
+      `${o.default ? ` <span class="muted">(default ${esc(o.default)})</span>` : ""}</td></tr>`).join("");
+    h += cardHTML(`Parameters (${p.options.length})`, `<table class="facts"><tbody>${rows}</tbody></table>`);
+  }
+  if (p.boundaries && p.boundaries.length) h += cardHTML("Off-label boundaries", list(p.boundaries));
+  if (p.citation) h += cardHTML("Citation", `<code>${esc(p.citation)}</code>`);
+  return h;
 }
 
-function stageCard(ev) {
+function stageCardHTML(ev) {
   let body = "";
   if (ev.stage === "onboarding") {
     body = kvTable(ev.facts) + chips(ev.disagreements);
   } else if (ev.stage === "judgment") {
     const cls = ev.action === "run" ? "badge-ok" : "badge-bad";
-    body = `<span class="badge ${cls}">${esc(ev.action || "?")}</span>
-      <p>${esc(ev.rationale || "")}</p>` +
+    body = `<span class="badge ${cls}">${esc(ev.action || "?")}</span><p>${esc(ev.rationale || "")}</p>` +
       chips([...(ev.precondition_failures || []), ...(ev.action === "refuse" ? ev.boundary_hits || [] : [])]);
   } else if (ev.stage === "execution") {
     const cls = ev.ok ? "badge-ok" : "badge-bad";
@@ -128,25 +286,26 @@ function stageCard(ev) {
       (ev.stderr_tail ? `<pre class="tail">${esc(ev.stderr_tail)}</pre>` : "");
   } else if (ev.stage === "evaluation") {
     const cls = ev.status === "ok" ? "badge-ok" : "badge-warn";
-    body = `<span class="badge ${cls}">${esc(ev.status)}</span>` +
-      metricsTable(ev.metrics) + list(ev.findings) +
+    body = `<span class="badge ${cls}">${esc(ev.status)}</span>` + metricsTable(ev.metrics) + list(ev.findings) +
       (ev.explanation ? `<p class="ok">${esc(ev.explanation)}</p>` : "");
   } else if (ev.stage === "diagnosis") {
     body = `<span class="badge badge-bad">${esc(ev.status)}</span>` + list(ev.findings) +
       (ev.proposed_fix ? `<p><b>Fix:</b> ${esc(ev.proposed_fix)}</p>` : "");
   } else if (ev.stage === "provision") {
-    if (ev.installed) {
-      body = `<span class="badge badge-ok">installed</span>` +
-        kvTable({ version: ev.version, binary: ev.binary, via: ev.method });
-    } else {
-      body = `<span class="badge badge-bad">blocked</span><p class="warn">${esc(ev.reason || "")}</p>`;
-    }
+    body = ev.installed
+      ? `<span class="badge badge-ok">installed</span>` + kvTable({ version: ev.version, binary: ev.binary, via: ev.method })
+      : `<span class="badge badge-bad">blocked</span><p class="warn">${esc(ev.reason || "")}</p>`;
+  } else if (ev.stage === "docs_check") {
+    const miss = ev.missing || [];
+    body = miss.length
+      ? `<span class="badge badge-warn">missing</span><p>Creating docs: ${esc(miss.join(", "))}</p>` +
+        (ev.have && ev.have.length ? `<p class="ok">Already present: ${esc(ev.have.join(", "))}</p>` : "")
+      : `<span class="badge badge-ok">complete</span><p class="ok">All section docs already exist.</p>`;
   } else if (ev.stage === "source") {
     body = `<p>${esc(fmt(ev.chars))} chars of --help${ev.url ? " + docs" : ""} captured.</p>`;
   } else if (ev.stage === "curate") {
     const cls = ev.status === "valid" ? "badge-ok" : "badge-warn";
-    body = `<span class="badge ${cls}">${esc(ev.status)}</span>` +
-      kvTable({ items: ev.items, fixes: ev.fixes });
+    body = `<span class="badge ${cls}">${esc(ev.status)}</span>` + kvTable({ items: ev.items, fixes: ev.fixes });
   } else if (ev.stage === "persist") {
     body = list([...(ev.sections_written || []), ev.manifest].filter(Boolean));
   } else if (ev.stage === "scaffold") {
@@ -158,9 +317,11 @@ function stageCard(ev) {
   } else {
     body = `<span class="warn">${esc(ev.error || "unknown stage")}</span>`;
   }
-  return card(ev.title || ev.stage, body);
+  return cardHTML(ev.title || ev.stage, body);
 }
 
+// ---- small HTML helpers ----
+function cardHTML(title, inner) { return `<div class="card"><h3>${esc(title)}</h3>${inner}</div>`; }
 function kvTable(obj) {
   const rows = Object.entries(obj || {})
     .map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td class="v">${esc(fmt(v))}</td></tr>`).join("");
@@ -168,87 +329,120 @@ function kvTable(obj) {
 }
 function metricsTable(metrics) {
   const rows = Object.entries(metrics || {}).map(([k, s]) =>
-    `<tr><td class="k">${esc(k)}</td><td class="v">${esc(fmt(s && s.value))}</td>
-     <td class="v tier-${esc(s && s.tier)}">${esc(s && s.tier || "")}</td></tr>`).join("");
+    `<tr><td class="k">${esc(k)}</td><td class="v">${esc(fmt(s && s.value))}</td>` +
+    `<td class="v tier-${esc(s && s.tier)}">${esc(s && s.tier || "")}</td></tr>`).join("");
   return rows ? `<table class="facts"><tbody>${rows}</tbody></table>` : "";
 }
-function chips(arr) {
-  return (arr || []).map((d) => `<span class="chip">⚠ ${esc(d)}</span>`).join("");
-}
-function list(arr) {
-  return (arr && arr.length) ? "<ul>" + arr.map((x) => `<li>${esc(x)}</li>`).join("") + "</ul>" : "";
-}
-
-function card(title, innerHTML) {
-  const c = document.createElement("div");
-  c.className = "card";
-  c.innerHTML = `<h3>${esc(title)}</h3>${innerHTML}`;
-  return c;
-}
+function chips(arr) { return (arr || []).map((d) => `<span class="chip">⚠ ${esc(d)}</span>`).join(""); }
+function list(arr) { return (arr && arr.length) ? "<ul>" + arr.map((x) => `<li>${esc(x)}</li>`).join("") + "</ul>" : ""; }
 
 // ---- tiny inline-SVG charts (no external lib) ----
 function barChart(hist) {
   const W = 460, H = 160, pad = 26;
   const keys = Object.keys(hist).map(Number).sort((a, b) => a - b);
-  const vals = keys.map((k) => hist[k]);
-  const maxV = Math.max(...vals, 1);
+  const maxV = Math.max(...keys.map((k) => hist[k]), 1);
   const bw = (W - 2 * pad) / keys.length;
   let bars = "";
   keys.forEach((k, i) => {
     const bh = (H - 2 * pad) * (hist[k] / maxV);
-    const x = pad + i * bw;
-    const y = H - pad - bh;
-    bars += `<rect class="bar" x="${x}" y="${y}" width="${Math.max(bw - 1, 1)}" height="${bh}"><title>${k} bp: ${hist[k]}</title></rect>`;
+    bars += `<rect class="bar" x="${pad + i * bw}" y="${H - pad - bh}" width="${Math.max(bw - 1, 1)}" height="${bh}"><title>${k} bp: ${hist[k]}</title></rect>`;
   });
-  const xlabels = `<text x="${pad}" y="${H - 8}">${keys[0]} bp</text>` +
-    `<text x="${W - pad}" y="${H - 8}" text-anchor="end">${keys[keys.length - 1]} bp</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}">
-    <line class="axis" x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}"/>
-    ${bars}${xlabels}
-    <text x="${pad}" y="${pad - 10}">max ${maxV}</text></svg>`;
+  const xl = `<text x="${pad}" y="${H - 8}">${keys[0]} bp</text><text x="${W - pad}" y="${H - 8}" text-anchor="end">${keys[keys.length - 1]} bp</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><line class="axis" x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}"/>${bars}${xl}<text x="${pad}" y="${pad - 10}">max ${maxV}</text></svg>`;
 }
-
 function lineChart(series) {
   const W = 460, H = 160, pad = 26;
-  const n = series.length;
-  const maxY = Math.max(...series, 40);
+  const n = series.length, maxY = Math.max(...series, 40);
   const x = (i) => pad + (W - 2 * pad) * (n === 1 ? 0 : i / (n - 1));
   const y = (v) => H - pad - (H - 2 * pad) * (v / maxY);
   const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  // Phred 30 reference line
   const y30 = y(30);
-  return `<svg viewBox="0 0 ${W} ${H}">
-    <line class="axis" x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}"/>
-    <line class="axis" x1="${pad}" y1="${y30}" x2="${W - pad}" y2="${y30}" stroke-dasharray="3 3"/>
-    <text x="${W - pad}" y="${y30 - 3}" text-anchor="end">Q30</text>
-    <polyline class="line" points="${pts}"/>
-    <text x="${pad}" y="${H - 8}">pos 1</text>
-    <text x="${W - pad}" y="${H - 8}" text-anchor="end">pos ${n}</text></svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><line class="axis" x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}"/>` +
+    `<line class="axis" x1="${pad}" y1="${y30}" x2="${W - pad}" y2="${y30}" stroke-dasharray="3 3"/>` +
+    `<text x="${W - pad}" y="${y30 - 3}" text-anchor="end">Q30</text><polyline class="line" points="${pts}"/>` +
+    `<text x="${pad}" y="${H - 8}">pos 1</text><text x="${W - pad}" y="${H - 8}" text-anchor="end">pos ${n}</text></svg>`;
 }
 
 // ---- helpers ----
-function fmt(v) {
-  if (v === true) return "yes";
-  if (v === false) return "no";
-  if (v === null || v === undefined) return "—";
-  return String(v);
-}
+function fmt(v) { return v === true ? "yes" : v === false ? "no" : (v === null || v === undefined) ? "—" : String(v); }
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-// ---- wire up ----
+// ---- tabs (Output / Activity / Terminal) ----
+let currentTab = "output";
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+  $("tab-output").hidden = name !== "output";
+  $("tab-activity").hidden = name !== "activity";
+  $("tab-terminal").hidden = name !== "terminal";
+  if (name === "activity") $("act-badge").hidden = true;
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+// ---- navigation: ⌘↑/⌘↓ = question history, ⌘←/⌘→ = Output/Activity/Terminal tabs ----
+const TAB_ORDER = ["output", "activity", "terminal"];
+function cycleTab(dir) {
+  const i = Math.max(0, Math.min(TAB_ORDER.length - 1, TAB_ORDER.indexOf(currentTab) + dir));
+  switchTab(TAB_ORDER[i]);
+}
+$("turn-select").addEventListener("change", (e) => showTurn(parseInt(e.target.value, 10)));
+document.addEventListener("keydown", (e) => {
+  if (!(e.metaKey || e.ctrlKey)) return;
+  if (e.key === "ArrowUp") { e.preventDefault(); showTurn(view - 1); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); showTurn(view + 1); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); cycleTab(-1); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); cycleTab(1); }
+});
+
+// ---- input history (plain up/down arrows), like the kgx chat ----
+let inputHistory = [];
+let inputHistIdx = -1;
+$("message").addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey) return;         // ⌘↑/⌘↓ are for turn navigation
+  const el = e.target;
+  if (e.key === "ArrowUp" && inputHistory.length > 0) {
+    e.preventDefault();
+    if (inputHistIdx === -1) inputHistIdx = inputHistory.length;
+    if (inputHistIdx > 0) { inputHistIdx--; el.value = inputHistory[inputHistIdx]; }
+  } else if (e.key === "ArrowDown" && inputHistIdx >= 0) {
+    e.preventDefault();
+    inputHistIdx++;
+    if (inputHistIdx >= inputHistory.length) { inputHistIdx = -1; el.value = ""; }
+    else { el.value = inputHistory[inputHistIdx]; }
+  }
+});
+
+// ---- wire up (Send doubles as Stop while a request is in flight) ----
+let inFlight = false;
+let abortCtrl = null;
+function setStopMode(on) {
+  const b = $("send");
+  b.textContent = on ? "Stop" : "Send";
+  b.classList.toggle("stop", on);
+}
 $("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (inFlight) { if (abortCtrl) abortCtrl.abort(); return; }   // button is "Stop"
   const msg = $("message").value.trim();
   if (!msg) return;
-  const file = $("file").value.trim();
   const provider = $("provider").value;
+  inputHistory.push(msg);
+  inputHistIdx = -1;
   addMsg(msg, "user");
+  startTurn(msg);
+  addActivity("▸ " + msg, "turn");
   $("message").value = "";
-  $("send").disabled = true;
-  try { await send(msg, file, provider); }
-  catch (err) { addMsg("Error: " + err.message, "assistant", "warn"); }
-  finally { $("send").disabled = false; $("message").focus(); }
+  const history = convo.slice(-6);
+  convo.push({ role: "user", content: msg });
+  inFlight = true; setStopMode(true);
+  abortCtrl = new AbortController();
+  try { await send(msg, null, provider, abortCtrl.signal, history); }
+  catch (err) {
+    if (err.name === "AbortError") { addActivity("stopped by user", "err"); }
+    else { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }
+  }
+  finally { inFlight = false; setStopMode(false); abortCtrl = null; $("message").focus(); }
 });
