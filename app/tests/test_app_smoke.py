@@ -97,6 +97,45 @@ def test_explain_tool_history_is_bounded():
     assert len(et._history_text(huge)) <= et.HIST_CAP   # sliding-window budget respected
 
 
+def test_resolve_find_tool_offline():
+    # tool-less discovery questions route to find_tool with no missing slot (they dispatch)
+    for q in ("which tool is good for alignment?", "which tool takes fastq?",
+              "recommend a tool for variant calling", "what tools do you have?"):
+        it = ground(q)
+        assert it.intent == "find_tool", q
+    from app import resolve
+    assert resolve.missing_slot(Intent(intent="find_tool")) is None
+    # a NAMED-tool question is still explain_tool, not find_tool
+    assert ground("tell me about fastqc").intent == "explain_tool"
+    # a question with a FASTQ file is still describe_data, not find_tool
+    assert ground("which tool should I run on reads.fastq.gz").intent != "find_tool"
+
+
+def test_find_tool_capability_offline():
+    from app.capabilities import find_tool as ft
+    aln = ft.run("which tool is good for alignment?", NullProvider())
+    assert aln["panel"]["kind"] == "catalog"
+    tools = {t["tool"] for t in aln["panel"]["tools"]}
+    assert {"hisat2", "star"} <= tools
+    fq = ft.run("which tool takes fastq?", NullProvider())
+    assert "fastqc" in {t["tool"] for t in fq["panel"]["tools"]}
+    # honest empty answer for an undocumented category — never invents a tool
+    none = ft.run("what tool for methylation?", NullProvider())
+    assert none["panel"]["tools"] == []
+    assert "don't have a documented tool" in none["prose"]
+
+
+def test_chat_find_tool_sse(offline):
+    client = TestClient(create_app())
+    r = client.post("/api/chat", json={"message": "which tool takes fastq?", "provider": "auto"})
+    assert r.status_code == 200
+    events = _parse_sse(r.text)
+    assert json.loads(events["meta"])["intent"] == "find_tool"
+    panel = json.loads(events["panel"])
+    assert panel["kind"] == "catalog"
+    assert "fastqc" in {t["tool"] for t in panel["tools"]}
+
+
 def test_resolve_named_tool_overrides_other():
     from app import resolve
     it = Intent(intent="other")

@@ -22,7 +22,7 @@ from starlette.concurrency import run_in_threadpool
 from shared.llm.provider import get_provider
 from app import resolve
 from app.intent import classify, stub_text
-from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool
+from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool, find_tool
 
 
 class ChatRequest(BaseModel):
@@ -139,6 +139,13 @@ def make_chat_router() -> APIRouter:
                 tool = intent.tool.strip().lower()
                 yield _sse("log", json.dumps({"text": f"Looking up {tool} documentation…"}))
                 result = await run_in_threadpool(explain_tool.run, req.message, tool, provider, req.history)
+                if result.get("panel") is not None:
+                    yield _sse("panel", json.dumps(result["panel"]))
+                yield _sse("prose", json.dumps({"text": result.get("prose", "")}))
+
+            elif intent.intent == "find_tool":
+                yield _sse("log", json.dumps({"text": "Searching the tool catalog…"}))
+                result = await run_in_threadpool(find_tool.run, req.message, provider)
                 if result.get("panel") is not None:
                     yield _sse("panel", json.dumps(result["panel"]))
                 yield _sse("prose", json.dumps({"text": result.get("prose", "")}))

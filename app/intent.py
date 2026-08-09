@@ -13,15 +13,17 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-IntentName = Literal["describe_data", "explain_tool", "propose_strategy", "run_pipeline",
-                     "add_tool", "other"]
+IntentName = Literal["describe_data", "explain_tool", "find_tool", "propose_strategy",
+                     "run_pipeline", "add_tool", "other"]
 
 _SYSTEM = (
     "You classify a scientist's bioinformatics request into one intent and extract only what is "
     "explicitly stated (use 'unknown' otherwise). Set `tool` to the program named, if any. Intents: "
     "describe_data (inspect/summarize a DATA FILE, e.g. a FASTQ), "
-    "explain_tool (a question ABOUT a tool/program itself: what it does, how to run it, its "
+    "explain_tool (a question ABOUT a specific NAMED tool/program: what it does, how to run it, its "
     "parameters/options — set `tool`), "
+    "find_tool (a cross-tool question with NO specific tool named: which/what tool does X, takes "
+    "input Y, or is good for Z — e.g. 'which tool takes fastq', 'what's good for alignment'), "
     "propose_strategy (what analysis could I do), "
     "run_pipeline (actually run a tool on a file), "
     "add_tool (install/add a tool), other."

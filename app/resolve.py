@@ -24,6 +24,10 @@ FASTQ_RE = re.compile(r"\S+\.(?:fastq|fq)(?:\.gz)?", re.IGNORECASE)
 FLAG_RE = re.compile(r"(?:^|\s)--?[A-Za-z][\w-]*")
 _RUN_RE = re.compile(r"\brun\b", re.IGNORECASE)
 _ADD_RE = re.compile(r"\b(?:install|add(?:\s+the)?(?:\s+tool)?)\s+([A-Za-z0-9][\w.\-]+)", re.IGNORECASE)
+# a tool-less "which/what/recommend … tool/program" discovery question -> find_tool (cross-tool RAG)
+_FIND_RE = re.compile(
+    r"\b(?:which|what|whats|recommend|suggest|best|any|is there a?)\b.{0,40}"
+    r"\b(?:tool|tools|program|programs|software|package)\b", re.IGNORECASE)
 
 # Slots each intent needs before it can act. If unresolved after grounding, the router asks.
 # (run_pipeline's tool defaults to fastqc, so only `file` is required.)
@@ -79,11 +83,22 @@ def last_entity(history: Optional[list[dict]], kind: str) -> Optional[str]:
 # resolution
 # --------------------------------------------------------------------------- #
 
+def find_tool_question(message: str) -> bool:
+    return bool(_FIND_RE.search(message or ""))
+
+
 def resolve(intent, message: str, history: Optional[list[dict]]) -> list[str]:
     """Mutate `intent` in place: correct classification + fill slots. Returns human-readable notes."""
     notes: list[str] = []
     named = tool_in(message)
     fq = fastq_in(message)
+
+    # 0) find_tool: a discovery question with no specific tool named and no file to act on. Corrects
+    #    both a non-committal 'other' and a weak model that guessed 'explain_tool' without a tool.
+    if not named and not fq and find_tool_question(message) and \
+            intent.intent in ("other", "explain_tool", "propose_strategy"):
+        intent.intent = "find_tool"
+        notes.append("intent=find_tool (cross-tool discovery, no tool named)")
 
     # 1) intent correction — only when the model was non-committal ("other")
     if intent.intent == "other":

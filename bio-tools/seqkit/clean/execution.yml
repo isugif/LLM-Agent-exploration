@@ -1,0 +1,13 @@
+# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
+# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
+# │ placeholder with expert-reviewed content and delete the markers. Until then │
+# │ the harness REFUSES to route this tool.                                     │
+# └────────────────────────────────────────────────────────────────────────────┘
+argv:
+- HRR_tool
+- '{input}'
+- '{out_dir}'
+version_argv:
+- HRR_tool
+- --version
+install_hint: HRR_install command

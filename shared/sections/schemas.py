@@ -151,6 +151,11 @@ class MetaSection(BaseModel):
     summary: str = Field(description="one-paragraph what-it-does, used by the judgment prompt")
     expectations_ref: Optional[str] = Field(
         default=None, description="filename of the shared assay expectation table, e.g. rnaseq_qc.yaml")
+    category_tags: list[str] = Field(
+        default_factory=list,
+        description="tool PURPOSE labels from the controlled vocabulary in "
+                    "shared/knowledge/categories.py:CATEGORIES, e.g. ['Read_Alignment_and_Mapping']. "
+                    "Powers cross-tool discovery (find_tool); optional so untagged tools still validate.")
 
 
 class ExecutionSection(BaseModel):

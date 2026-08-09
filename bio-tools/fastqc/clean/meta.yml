@@ -4,3 +4,4 @@ summary: >
   Produces per-file HTML + ZIP reports of per-base quality, GC content,
   duplication, adapter and overrepresented-sequence signals.
 expectations_ref: rnaseq_qc.yaml
+category_tags: [Sequence_Data_Processing_and_Quality_Control]

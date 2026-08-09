@@ -252,6 +252,109 @@ steps that the current whitelist-only provisioning deliberately avoids.
 
 ---
 
+## LLM-technique enhancements (from a post-training / test-time-scaling review)
+
+The following five items came out of reviewing the app against modern LLM techniques
+(post-training, reasoning, test-time scaling, tool-use, agents, alignment, RL/fine-tuning). The
+through-line: this app's deterministic verifiers (`curator/validators/framework.py:CheckResult`,
+the expectation-table scoring, `failure_modes`, HRR gates) double as **verifiers, reward
+functions, and eval graders** — which is exactly what makes these techniques cheap to adopt here.
+Ordered by value/effort.
+
+### 1 — Escalation ladder + validator-scored best-of-N (test-time scaling)
+
+**Status:** 💡 idea
+
+**What:** The curator's `validate → fix → revalidate` loop (`curator/stages/steps.py`) is already
+primitive verifier-guided iteration. Upgrade it two ways: (a) an **escalation ladder** — ollama →
+retry-with-error-feedback → `claude` (via the existing `ClaudeCLIProvider`) → HRR human — instead
+of giving up after `max_fixes`; (b) **best-of-N**: sample N section drafts, score each with the
+existing validators, keep the highest-scoring. Same pattern for the judgment boundary check
+(`_confirm_boundary`): sample 3, majority-vote, escalate on disagreement.
+
+**Why it matters:** generation is untrusted but *checking is trusted*, so spending more inference
+compute is safe — you can only ever accept a draft your validators pass. Directly attacks the
+weak-local-model quality ceiling on the one genuinely judgment-shaped call.
+
+**Rough shape:** thread an attempt→provider ladder through `steps.py:fix` and the orchestrators
+(`curator/{langgraph,nooa}_curator/`); reuse `providers/registry.py:ROLE_PREFERENCE` for the
+provider order. Pairs with [Source-parity guards].
+
+### 2 — Frozen eval set + scorecard for every LLM-touching step (alignment / LLM research hygiene)
+
+**Status:** 📋 scoped
+
+**What:** A small committed eval set that scores each LLM-shaped step across providers:
+**refusal calibration** (should-refuse vs should-run prompts → over-refusal / under-refusal rates),
+**DeclaredFacts extraction** (question → expected facts), **boundary confirmation**, and **curator
+source-transfer** (help text → expected section). Emits a per-provider scorecard, extending the
+existing `tests/REPORT.md` pattern.
+
+**Why it matters:** prerequisite for trusting any model swap (qwen → llama → claude → a future
+fine-tune) — turns "seems fine" into a measured number. **Under-refusal is the project's core
+silent-failure nightmare**, and today only a single refusal case is tested.
+
+**Rough shape:** a `tests/eval_cases.yaml` + runner mirroring `tests/run_tests.py`, run with
+`--llm` against each provider; report refusal confusion matrix + extraction accuracy. Overlaps with
+[Proactive parity / consistency gates].
+
+### 3 — Bounded auto-remediation in Diagnosis (constrained agency)
+
+**Status:** 💡 idea
+
+**What:** Diagnosis currently matches a crash to a `failure_mode` and emits `proposed_fix`, then
+stops (`shared/harness_steps.py:diagnose_run`). Close the loop: when the matched failure mode
+carries a *mechanical* fix from the contract's own library (e.g. the Java runtime trait's
+OOM → `-Xmx` bump), **apply it, rerun once, and escalate if it still fails** — fully audited.
+
+**Why it matters:** this is the one place more agency pays off without abandoning the safety
+posture — the fix comes from a human-reviewed contract, not a free-form model plan, and it's capped
+at a single retry. Turns the incident library from advisory into acting.
+
+**Rough shape:** extend `FailureMode` with an optional structured/re-runnable remedy (distinct from
+the prose `fix`); add a bounded retry in the orchestrators after diagnosis; record the
+attempt+outcome in the run audit. Depends on the enforceable side of
+[Data-trait consumption] and [Unified error-code taxonomy].
+
+### 4 — Function-calling intent router for the chat app (tool-use)
+
+**Status:** 💡 idea
+
+**What:** The chat UI's intent router (`app/intent.py`) is a hand-rolled classifier with
+deterministic backstops. Replace/augment it with native **function-calling**: expose each
+capability (`describe_data`, `run_pipeline`, `add_tool`, `explain_tool`) as a tool schema and let
+the model route via structured tool selection, keeping the deterministic backstops as a fallback.
+
+**Why it matters:** more robust and extensible routing (adding a capability = adding a schema), and
+it's the natural substrate for the [Judgment "retrieve & match"] item — tool selection is itself a
+tool-use problem. Note the app's deliberate inversion (pipeline decides *when* to call the LLM)
+stays intact in the harnesses; this is only about the chat front-door.
+
+**Rough shape:** define per-capability tool schemas; use the provider's function-calling (or
+structured-output) path in `app/api/routes_chat.py`; keep `app/intent.py`'s rules as the
+low-confidence fallback.
+
+### 5 — Harvest training data now; LoRA a small local model later (fine-tuning / RLVR)
+
+**Status:** 💡 idea
+
+**What:** Every run already produces schema-constrained input→output pairs with **automatic
+labels**: (question → DeclaredFacts), (deliverable + boundary → violates/reason), (help text →
+validated section JSON, labeled pass/fail by the validators), plus **free human labels** from HRR
+review decisions. Log these as a dataset now (zero cost); when volume justifies it, LoRA-fine-tune a
+small local model on the app's actual tasks.
+
+**Why it matters:** the LLM calls here are tiny, typed extractions — exactly what a fine-tuned 3–8B
+model does well, at lower latency and fully offline. The validator-produced labels make
+**RL-from-verifiable-rewards** unusually feasible if training is ever pursued; near-term, use the
+reward signal for *selection* (item 1), not training.
+
+**Rough shape:** an opt-in logging hook that writes prompt/response/label rows (redacted, no
+secrets) to a local dataset dir; revisit fine-tuning as a separate milestone once there's volume.
+Gated by [item 2]'s eval harness (you need the scorecard to prove a fine-tune actually wins).
+
+---
+
 <!-- Template for new items:
 
 ## <short title>

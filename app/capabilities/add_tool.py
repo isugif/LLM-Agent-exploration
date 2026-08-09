@@ -25,7 +25,7 @@ from curator.stages.provision import ENV, ensure_installed
 from curator.stages.steps import SectionTask
 from curator.nooa_curator.orchestrator import curate_section
 from shared.sections.scaffold import write_machine_skeletons
-from shared import contracts_lib as cl
+from shared import catalog, contracts_lib as cl
 
 _ROLES = ("transfer", "enrich", "fix")
 _PROVIDER_MAP = {"claude": "claude-cli", "ollama": "ollama"}   # UI name -> curator registry name
@@ -92,6 +92,7 @@ def stage_events(tool: str, ui_provider: str = "auto", sections: Optional[list[s
     written = _persist_sections(tool_dir, outcomes) if outcomes else []
     scaffolded = write_machine_skeletons(tool_dir)             # idempotent — skips existing
     manifest = _write_manifest(tool_dir, tool, inst.version)   # written once all files exist
+    catalog.invalidate()                                       # new tool -> refresh find_tool's view
     yield "persist", {"sections_written": [Path(p).name for p in written],
                       "manifest": Path(manifest).name, "already_documented": not missing}
     yield "scaffold", {"hrr_files": [Path(p).name for p in scaffolded]}

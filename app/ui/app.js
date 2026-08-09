@@ -162,8 +162,12 @@ async function send(message, file, provider, signal, history) {
         addActivity(t, "think"); setThinking(thinking, t); term("… " + t);
       } else if (event === "panel") {
         const p = JSON.parse(data);
-        setOutput(p.kind === "tool" ? toolPanelHTML(p) : dataPanelHTML(p), p.kind === "tool" ? "tool" : "profile");
-        addActivity(p.kind === "tool" ? "documentation ready" : "data profile ready", "ok");
+        let html, mode, note;
+        if (p.kind === "tool") { html = toolPanelHTML(p); mode = "tool"; note = "documentation ready"; }
+        else if (p.kind === "catalog") { html = catalogPanelHTML(p); mode = "catalog"; note = "tool matches ready"; }
+        else { html = dataPanelHTML(p); mode = "profile"; note = "data profile ready"; }
+        setOutput(html, mode);
+        addActivity(note, "ok");
       } else if (event === "stage") {
         const ev = JSON.parse(data);
         appendStage(ev);
@@ -267,6 +271,28 @@ function toolPanelHTML(p) {
   }
   if (p.boundaries && p.boundaries.length) h += cardHTML("Off-label boundaries", list(p.boundaries));
   if (p.citation) h += cardHTML("Citation", `<code>${esc(p.citation)}</code>`);
+  return h;
+}
+
+function catalogPanelHTML(p) {
+  const q = p.query || {};
+  const crit = [q.category && q.category.replace(/_/g, " "), q.input_format && `input: ${q.input_format}`]
+    .filter(Boolean).join(" · ");
+  let h = `<div><h2>Tool matches${p.count != null ? ` (${p.count})` : ""}</h2>
+    <div class="file-name">${esc(crit || "catalog")}</div></div>`;
+  if (!p.tools || !p.tools.length) {
+    return h + cardHTML("No match", `<span class="warn">No documented tool fits — try "install &lt;tool&gt;".</span>`);
+  }
+  for (const t of p.tools) {
+    const badge = t.reviewed ? `<span class="badge badge-ok">reviewed</span>`
+      : `<span class="badge badge-warn">pending review</span>`;
+    const cats = (t.categories || []).map((c) => `<span class="chip">${esc(c.replace(/_/g, " "))}</span>`).join("");
+    const fmts = [(t.input_formats || []).length ? `in: ${t.input_formats.join(", ")}` : "",
+      (t.output_formats || []).length ? `out: ${t.output_formats.join(", ")}` : ""].filter(Boolean).join(" · ");
+    const body = `${badge}${t.summary ? `<p>${esc(t.summary)}</p>` : ""}${cats}` +
+      `${fmts ? `<div class="file-name">${esc(fmts)}</div>` : ""}`;
+    h += cardHTML(esc(t.tool), body);
+  }
   return h;
 }
 
