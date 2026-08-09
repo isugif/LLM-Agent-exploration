@@ -15,8 +15,8 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from shared import contracts_lib as cl
-from shared.models import RouteDecision
-from shared.llm.provider import get_provider, NullProvider
+from shared.harness_steps import build_route, review_gate
+from shared.llm.provider import provider_by_name, NullProvider
 
 
 class BoundaryCheck(BaseModel):
@@ -55,22 +55,16 @@ def _confirm_boundary(provider, tool_id: str, tool_summary: str,
 def judgment_node(state: dict) -> dict:
     contract = cl.load_contract(state["tool"])
     spec = state["spec"]
-    provider = get_provider()
+    # one availability check per run: onboarding recorded the provider name in state
+    provider = provider_by_name(state.get("llm_provider"))
 
     # 0) human-review gate: refuse an un-vetted contract (HRR_ markers) before anything else.
-    if not cl.is_reviewed(contract):
-        markers = cl.find_hrr_markers(contract)
-        return {"route": RouteDecision(
-            action="refuse",
-            rationale=f"{contract['id']}'s contract is pending human review "
-                      f"({len(markers)} HRR_ marker(s) in machine sections).",
-            confidence=1.0,
-            precondition_failures=[f"unreviewed: {m}" for m in markers[:3]],
-        ).to_dict()}
+    gate = review_gate(contract)
+    if gate is not None:
+        return {"route": gate.to_dict()}
 
     # 1) deterministic preconditions
     blocking, warnings = cl.evaluate_preconditions(contract, spec["declared"], spec["measured"])
-    precondition_failures = [f"{b['id']}: {b.get('message','')}" for b in blocking]
 
     # 2) must-not-use boundaries (keyword pre-filter -> LLM confirmation)
     boundary_hits, confirmed = [], []
@@ -82,21 +76,4 @@ def judgment_node(state: dict) -> dict:
         if violates:
             confirmed.append(b["id"])
 
-    if blocking or confirmed:
-        parts = precondition_failures + [f"confirmed boundary: {c}" for c in confirmed]
-        route = RouteDecision(
-            action="refuse",
-            rationale="Contract violation(s): " + "; ".join(parts),
-            confidence=0.9 if blocking else 0.7,
-            precondition_failures=precondition_failures,
-            boundary_hits=boundary_hits,
-        )
-    else:
-        note = "preconditions satisfied; no confirmed boundary violations."
-        if warnings:
-            note += " warnings: " + "; ".join(w["id"] for w in warnings)
-        route = RouteDecision(
-            action="run", rationale=note, confidence=0.8,
-            boundary_hits=boundary_hits,
-        )
-    return {"route": route.to_dict()}
+    return {"route": build_route(blocking, confirmed, boundary_hits, warnings).to_dict()}

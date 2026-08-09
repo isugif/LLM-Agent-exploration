@@ -12,6 +12,7 @@ from nooa import Agent, strategy
 from nooa.strategies import PredictStrategy
 
 from shared import contracts_lib as cl
+from shared.harness_steps import evaluation_verdict, score_metrics
 from shared.tools.registry import get_parser
 from shared.models import Verdict
 
@@ -35,22 +36,10 @@ class EvaluationAgent(Agent):
         return get_parser(self.tool_id)(output_dir)
 
     def score(self, metrics: dict):
-        scored, findings = {}, []
-        for name in self.expectations.get("metrics", {}):   # scored metrics come from the contract
-            if name in metrics:
-                s = cl.score_metric(self.expectations, name, metrics[name])
-                scored[name] = s
-                if s["tier"] in ("warn", "fail"):
-                    note = f" ({s['note']})" if s["note"] else ""
-                    findings.append(f"{name}={s['value']} -> {s['tier'].upper()}{note}")
-        return scored, findings
+        return score_metrics(self.expectations, metrics)
 
     def verdict(self, metrics: dict, scored: dict, findings: list, explanation: str | None) -> Verdict:
-        if "error" in metrics:
-            return Verdict(status="cannot_assess", findings=[metrics["error"]], escalate=True)
-        return Verdict(status="ok" if not findings else "anomaly",
-                       findings=findings or ["all scored metrics within expected ranges"],
-                       explanation=explanation, metrics=scored, escalate=False)
+        return evaluation_verdict(metrics, scored, findings, explanation)
 
     # --- agentic (LLM-driven) method ---
     @strategy(PredictStrategy())
