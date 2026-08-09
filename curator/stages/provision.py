@@ -64,8 +64,18 @@ def env_prefix() -> Path:
 
 
 def ensure_env() -> None:
-    if not env_prefix().exists():
-        subprocess.run(["mamba", "create", "-y", "-n", ENV], capture_output=True, text=True, timeout=600)
+    """Create the curator env if missing. Raises RuntimeError when conda/mamba is absent or the
+    create fails — callers turn that into a blocked InstallOutcome, never a crash."""
+    try:
+        if env_prefix().exists():
+            return
+        p = subprocess.run(["mamba", "create", "-y", "-n", ENV],
+                           capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.SubprocessError) as exc:   # conda/mamba missing, timeout, ...
+        raise RuntimeError(f"conda/mamba unavailable: {exc}") from exc
+    if p.returncode != 0 or not env_prefix().exists():
+        tail = ((p.stderr or p.stdout) or "").strip()[-300:]
+        raise RuntimeError(f"could not create env '{ENV}': {tail}")
 
 
 def _resolve_binary(tool: str, explicit: Optional[str] = None) -> Optional[str]:
@@ -167,7 +177,10 @@ def ensure_installed(tool: str, *, binary: Optional[str] = None, allow_install: 
     except ValueError as exc:
         return InstallOutcome(tool, False, reason=str(exc))
 
-    ensure_env()
+    try:
+        ensure_env()
+    except RuntimeError as exc:
+        return InstallOutcome(tool, False, reason=str(exc))
 
     bin_name = _resolve_binary(tool, binary)
     if bin_name is not None:

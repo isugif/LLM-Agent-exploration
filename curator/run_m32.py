@@ -1,6 +1,6 @@
 """M3.2 driver: full curator pipeline in BOTH frameworks on FastQC's 3 clean sections.
 
-  python temp/curator/run_m32.py [--provider ollama]
+  python curator/run_m32.py [--provider ollama]
 
 Does three things:
   1. Runs install/input/citations through the LangGraph and NOOA orchestrations (with the committed
@@ -17,7 +17,6 @@ import pathlib
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO))
 
 from curator.providers import registry  # noqa: E402

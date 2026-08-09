@@ -21,8 +21,9 @@ PROVIDERS: dict[str, Provider] = {
 }
 
 # Which provider each stage prefers, most-preferred first. Falls through to the next available.
+# Keys must match the role names the stages/drivers resolve ("transfer", "enrich", "fix").
 ROLE_PREFERENCE = {
-    "source_transfer": ["claude-cli", "codex-cli", "ollama"],  # precision, no fabrication
+    "transfer": ["claude-cli", "codex-cli", "ollama"],         # precision, no fabrication
     "enrich": ["ollama", "claude-cli"],                        # interpretive, local is fine
     "fix": ["claude-cli", "ollama"],                           # targeted edits
     "classify": ["ollama", "claude-cli"],

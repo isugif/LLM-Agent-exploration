@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from shared import contracts_lib as cl
 from shared.tools.registry import get_parser
-from shared.models import Verdict
-from shared.llm.provider import get_provider, NullProvider
+from shared.harness_steps import evaluation_verdict, score_metrics
+from shared.llm.provider import provider_by_name, NullProvider
 
 
 def evaluation_node(state: dict) -> dict:
@@ -26,27 +26,12 @@ def evaluation_node(state: dict) -> dict:
     expectations = cl.load_expectations(contract)
     metrics = get_parser(tool_id)(state["run_result"]["output_dir"])
 
-    if "error" in metrics:
-        return {"verdict": Verdict(
-            status="cannot_assess",
-            findings=[metrics["error"]],
-            escalate=True,
-        ).to_dict()}
-
-    scored, findings = {}, []
-    for name in expectations.get("metrics", {}):        # scored metrics come from the contract
-        if name in metrics:
-            s = cl.score_metric(expectations, name, metrics[name])
-            scored[name] = s
-            if s["tier"] in ("warn", "fail"):
-                note = f" ({s['note']})" if s["note"] else ""
-                findings.append(f"{name}={s['value']} -> {s['tier'].upper()}{note}")
-
-    status = "ok" if not findings else "anomaly"
+    scored, findings = score_metrics(expectations, metrics)
 
     # LLM explanation is additive only; never changes the deterministic status.
     explanation = None
-    provider = get_provider(state.get("provider"))
+    # onboarding already resolved the (possibly UI-selected) provider; rebuild by name, no re-check
+    provider = provider_by_name(state.get("llm_provider"))
     if findings and not isinstance(provider, NullProvider):
         explanation = provider.complete(
             system=f"You are a bioinformatics QC assistant. Explain flagged {tool_id} metrics briefly "
@@ -54,10 +39,4 @@ def evaluation_node(state: dict) -> dict:
             prompt=f"Organism/assay context: {state['spec']['declared']}\nFlagged: {findings}",
         )
 
-    return {"verdict": Verdict(
-        status=status,
-        findings=findings or ["all scored metrics within expected ranges"],
-        explanation=explanation,
-        metrics=scored,
-        escalate=False,
-    ).to_dict()}
+    return {"verdict": evaluation_verdict(metrics, scored, findings, explanation).to_dict()}

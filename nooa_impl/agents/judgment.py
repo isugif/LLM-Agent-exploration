@@ -12,11 +12,12 @@ from nooa import Agent, strategy
 from nooa.strategies import PredictStrategy
 
 from shared import contracts_lib as cl
+from shared.harness_steps import build_route as _build_route, review_gate as _review_gate
 from shared.models import RouteDecision
 
 
 class BoundaryCheck(BaseModel):
-    violates: bool = Field(description="True only if FastQC itself is asked to do the forbidden thing.")
+    violates: bool = Field(description="True only if the named tool itself is asked to do the forbidden thing.")
     reason: str = Field(description="one short sentence")
 
 
@@ -29,18 +30,10 @@ class JudgmentAgent(Agent):
         self.tool_id = tool_id
         self.contract = cl.load_contract(tool_id)
 
-    # --- deterministic tools ---
+    # --- deterministic tools (thin wrappers over shared.harness_steps) ---
     def review_gate(self) -> RouteDecision | None:
         """Refuse an un-vetted contract (HRR_ markers in machine sections) before anything else."""
-        if cl.is_reviewed(self.contract):
-            return None
-        markers = cl.find_hrr_markers(self.contract)
-        return RouteDecision(
-            action="refuse",
-            rationale=f"{self.contract['id']}'s contract is pending human review "
-                      f"({len(markers)} HRR_ marker(s) in machine sections).",
-            confidence=1.0,
-            precondition_failures=[f"unreviewed: {m}" for m in markers[:3]])
+        return _review_gate(self.contract)
 
     def check_preconditions(self, declared: dict, measured: dict):
         blocking, warnings = cl.evaluate_preconditions(self.contract, declared, measured)
@@ -50,20 +43,7 @@ class JudgmentAgent(Agent):
         return cl.match_boundaries(self.contract, deliverable)
 
     def route(self, blocking, confirmed, boundary_notes, warnings) -> RouteDecision:
-        precondition_failures = [f"{b['id']}: {b.get('message','')}" for b in blocking]
-        if blocking or confirmed:
-            parts = precondition_failures + [f"confirmed boundary: {c}" for c in confirmed]
-            return RouteDecision(
-                action="refuse",
-                rationale="Contract violation(s): " + "; ".join(parts),
-                confidence=0.9 if blocking else 0.7,
-                precondition_failures=precondition_failures,
-                boundary_hits=boundary_notes,
-            )
-        note = "preconditions satisfied; no confirmed boundary violations."
-        if warnings:
-            note += " warnings: " + "; ".join(w["id"] for w in warnings)
-        return RouteDecision(action="run", rationale=note, confidence=0.8, boundary_hits=boundary_notes)
+        return _build_route(blocking, confirmed, boundary_notes, warnings)
 
     # --- agentic (LLM-driven) method ---
     @strategy(PredictStrategy())

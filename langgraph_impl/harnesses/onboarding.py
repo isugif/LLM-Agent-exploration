@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from shared.tools.registry import get_probe
 from shared.models import Spec
+from shared.harness_steps import reconcile
 from shared.llm.provider import get_provider, NullProvider
 
 
@@ -19,20 +20,6 @@ class DeclaredFacts(BaseModel):
     assay: str = Field(description="assay type: rna-seq, dna-seq, amplicon, wgs, or unknown")
     layout: str = Field(description="library layout: SE, PE, or unknown")
     organism: str = Field(description="organism if stated, else unknown")
-
-
-def _reconcile(declared: dict, measured: dict) -> list[str]:
-    """Flag declared-vs-measured conflicts — the cheap silent-error catch."""
-    d = []
-    dl, ml = declared.get("layout", "unknown").upper(), measured.get("layout", "")
-    if dl == "SE" and ml == "PE?":
-        d.append("declared single-end but filename looks like a paired mate (_1/_R1).")
-    if dl == "PE" and ml == "SE?":
-        d.append("declared paired-end but filename does not look like a mate file.")
-    if declared.get("platform", "unknown").lower() == "nanopore" and \
-       measured.get("read_length_max", 0) and measured["read_length_max"] < 200:
-        d.append("declared nanopore but reads are short (<200bp), which looks like short-read data.")
-    return d
 
 
 def onboarding_node(state: dict) -> dict:
@@ -50,7 +37,7 @@ def onboarding_node(state: dict) -> dict:
         if parsed is not None:
             declared = parsed.model_dump()
 
-    disagreements = _reconcile(declared, measured)
+    disagreements = reconcile(declared, measured)
     spec = Spec(
         question=state["question"],
         deliverable=state.get("deliverable", state["question"]),

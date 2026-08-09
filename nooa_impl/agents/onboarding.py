@@ -13,6 +13,7 @@ from nooa import Agent, strategy
 from nooa.strategies import PredictStrategy
 
 from shared.tools.registry import get_probe
+from shared.harness_steps import reconcile as _reconcile_facts
 from shared.models import Spec
 
 
@@ -31,17 +32,9 @@ class OnboardingAgent(Agent):
         return get_probe(tool_id)(input_path)
 
     def reconcile(self, question: str, deliverable: str, declared: dict, measured: dict) -> Spec:
-        d = []
-        dl, ml = (declared.get("layout", "unknown") or "unknown").upper(), measured.get("layout", "")
-        if dl == "SE" and ml == "PE?":
-            d.append("declared single-end but filename looks like a paired mate (_1/_R1).")
-        if dl == "PE" and ml == "SE?":
-            d.append("declared paired-end but filename does not look like a mate file.")
-        if (declared.get("platform", "unknown") or "").lower() == "nanopore" and \
-           measured.get("read_length_max", 0) and measured["read_length_max"] < 200:
-            d.append("declared nanopore but reads are short (<200bp), which looks like short-read data.")
         return Spec(question=question, deliverable=deliverable,
-                    declared=declared, measured=measured, disagreements=d)
+                    declared=declared, measured=measured,
+                    disagreements=_reconcile_facts(declared, measured))
 
     # --- agentic (LLM-driven) method ---
     @strategy(PredictStrategy())

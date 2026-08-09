@@ -21,6 +21,8 @@ declarative and safe even though contracts are data, not code.
 from __future__ import annotations
 
 import ast
+import copy
+import functools
 import operator
 from pathlib import Path
 from typing import Any
@@ -92,7 +94,15 @@ def load_contract(tool_id: str) -> dict[str, Any]:
     execution, preconditions, must_not_use, failure_modes. `meta` merges (summary, expectations_ref);
     the other machine sections map to a same-named key. Runtime traits contribute `failure_modes`
     (e.g. any Java tool inherits the OOM→-Xmx fix) — deduped by id, tool-specific entries winning.
+
+    Cached per tool_id for the life of the process (a run loads the same contract 4-5×); callers
+    get a deep copy so nobody can mutate the cached assembly.
     """
+    return copy.deepcopy(_assemble_contract(tool_id))
+
+
+@functools.lru_cache(maxsize=None)
+def _assemble_contract(tool_id: str) -> dict[str, Any]:
     manifest = load_manifest(tool_id)
     contract: dict[str, Any] = {"id": manifest["tool"], "version": manifest.get("version")}
     for ref in manifest.get("sections", []):
@@ -188,8 +198,11 @@ def safe_eval(expr: str, namespaces: dict[str, dict[str, Any]]) -> bool:
 
     def _eval(node: ast.AST) -> Any:
         if isinstance(node, ast.BoolOp):
-            vals = [_eval(v) for v in node.values]
-            return all(vals) if isinstance(node.op, ast.And) else any(vals)
+            # short-circuit like Python: lets an author guard a comparison behind an
+            # existence/format check without the later clause raising first
+            if isinstance(node.op, ast.And):
+                return all(_eval(v) for v in node.values)
+            return any(_eval(v) for v in node.values)
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
             return not _eval(node.operand)
         if isinstance(node, ast.Compare):
@@ -206,7 +219,12 @@ def safe_eval(expr: str, namespaces: dict[str, dict[str, Any]]) -> bool:
             base = node.value
             if not isinstance(base, ast.Name) or base.id not in namespaces:
                 raise ValueError(f"attribute access only on fact namespaces, got: {ast.dump(node)}")
-            return namespaces[base.id].get(node.attr)
+            # A MISSING fact must raise (-> "uncheckable" warning in evaluate_preconditions),
+            # never silently evaluate as None: `measured.format == 'x'` on a missing key would
+            # otherwise become a clean False and BLOCK instead of warn.
+            if node.attr not in namespaces[base.id]:
+                raise KeyError(f"missing fact: {base.id}.{node.attr}")
+            return namespaces[base.id][node.attr]
         if isinstance(node, ast.Name):
             if node.id in namespaces:
                 return namespaces[node.id]

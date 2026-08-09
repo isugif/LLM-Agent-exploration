@@ -10,12 +10,9 @@ If Ollama is unreachable we return (None, "null"); the orchestrator then skips t
 
 from __future__ import annotations
 
-import os
-
-import requests
-
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5vl:7b")
+# host/model convention + availability probe are shared config (not the LangGraph provider
+# mechanism — this track still talks to Ollama through nooa's UnifiedLLM below)
+from shared.llm.provider import OLLAMA_HOST, OLLAMA_MODEL, ollama_available
 
 
 def build_llm():
@@ -28,8 +25,6 @@ def build_llm():
     """
     from nooa.unifiedllm.registry import get_llm_client
     llm = get_llm_client(f"ollama_chat/{OLLAMA_MODEL}", api_base=OLLAMA_HOST)
-    try:
-        requests.get(f"{OLLAMA_HOST}/api/tags", timeout=3).raise_for_status()
+    if ollama_available():
         return llm, True, "ollama"
-    except Exception:  # noqa: BLE001
-        return llm, False, "null"
+    return llm, False, "null"

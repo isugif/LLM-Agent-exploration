@@ -11,7 +11,8 @@ from __future__ import annotations
 from typing import Optional
 
 from shared.probes.fastq_probe import profile_fastq
-from langgraph_impl.harnesses.onboarding import DeclaredFacts, _reconcile
+from shared.harness_steps import reconcile as _reconcile
+from langgraph_impl.harnesses.onboarding import DeclaredFacts
 
 # order + friendly labels for the facts table (keys come from shared/probes/fastq_probe.py:probe)
 _FACT_LABELS = [

@@ -29,10 +29,21 @@ from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
+# The one place the Ollama endpoint convention lives — nooa_impl/llm.py and the curator's
+# ollama provider import these rather than re-reading the env themselves.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5vl:7b")
 
 LLM_UNAVAILABLE = "[LLM unavailable — deterministic-only]"
+
+
+def ollama_available(host: str = OLLAMA_HOST) -> bool:
+    """Single availability probe shared by every track/module that needs it."""
+    try:
+        requests.get(f"{host}/api/tags", timeout=3).raise_for_status()
+        return True
+    except Exception:                        # noqa: BLE001
+        return False
 
 
 class NullProvider:
@@ -73,8 +84,12 @@ class OllamaProvider:
         return r.json()["message"]["content"]
 
     def extract(self, schema_model: Type[T], system: str, prompt: str) -> Optional[T]:
-        schema = schema_model.model_json_schema()
-        content = self._chat(system, prompt, fmt=schema)
+        # Any failure — server died mid-run, malformed output — degrades to "no answer",
+        # matching the NullProvider contract instead of crashing the node.
+        try:
+            content = self._chat(system, prompt, fmt=schema_model.model_json_schema())
+        except Exception:                    # noqa: BLE001
+            return None
         try:
             return schema_model.model_validate_json(content)
         except Exception:                    # noqa: BLE001 - malformed model output -> treat as no answer
@@ -84,7 +99,10 @@ class OllamaProvider:
                 return None
 
     def complete(self, system: str, prompt: str) -> str:
-        return self._chat(system, prompt)
+        try:
+            return self._chat(system, prompt)
+        except Exception:                    # noqa: BLE001
+            return LLM_UNAVAILABLE
 
 
 def _strip_fence(text: str) -> str:
@@ -139,24 +157,29 @@ class ClaudeCLIProvider:
                 return None
 
 
-def _ollama_up() -> bool:
-    try:
-        requests.get(f"{OLLAMA_HOST}/api/tags", timeout=3).raise_for_status()
-        return True
-    except Exception:                        # noqa: BLE001
-        return False
-
-
 def get_provider(name: Optional[str] = None):
     """Return a provider by name: 'ollama', 'claude', or None/'auto' (Ollama if up, else Null).
 
     Every branch degrades to NullProvider rather than raising, so the pipeline always runs its
     deterministic half. Existing callers use get_provider() (auto) unchanged.
     """
-    if name == "ollama":
-        return OllamaProvider() if _ollama_up() else NullProvider()
     if name == "claude":
         p = ClaudeCLIProvider()
         return p if p.is_available() else NullProvider()
-    # auto / None / anything else
-    return OllamaProvider() if _ollama_up() else NullProvider()
+    # "ollama" / auto / None / anything else
+    return OllamaProvider() if ollama_available() else NullProvider()
+
+
+def provider_by_name(name: Optional[str]):
+    """Rebuild a provider from its recorded name WITHOUT re-checking availability.
+
+    Onboarding resolves the (possibly UI-selected) provider once per run via get_provider(...)
+    and records `llm_provider` in state; downstream nodes reconstruct from that name, so one
+    availability check governs the whole run and the reported provider can't silently flip
+    between nodes.
+    """
+    if name == "ollama":
+        return OllamaProvider()
+    if name == "claude":
+        return ClaudeCLIProvider()
+    return NullProvider()

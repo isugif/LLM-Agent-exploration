@@ -6,14 +6,10 @@ This is the cheap/offline generation path (fine for enrichment; source-transfer 
 
 from __future__ import annotations
 
-import os
-
 import requests
 
 from curator.providers.base import LLMError
-
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5vl:7b")
+from shared.llm.provider import OLLAMA_HOST, OLLAMA_MODEL, ollama_available
 
 
 class OllamaProvider:
@@ -24,11 +20,7 @@ class OllamaProvider:
         self.model = model
 
     def is_available(self) -> bool:
-        try:
-            requests.get(f"{self.host}/api/tags", timeout=3).raise_for_status()
-            return True
-        except Exception:  # noqa: BLE001
-            return False
+        return ollama_available(self.host)
 
     def run(self, prompt: str, *, timeout: int = 180) -> str:
         payload = {

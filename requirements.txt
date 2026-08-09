@@ -5,19 +5,21 @@
 #
 # nooa itself is installed separately (conda env `nooa`, package `nooa==0.0.8`).
 
+# Pinned to the versions the framework comparison was validated against — the repo's
+# CONCLUSIONS depend on framework behavior, so results must be reproducible.
 # LangGraph track
-langgraph
-langchain-core
+langgraph==1.2.10
+langchain-core==1.5.3
 
 # shared layer
-pyyaml
-jsonschema
-requests
-pydantic
+pyyaml==6.0.3
+jsonschema==4.26.0
+requests==2.34.2
+pydantic==2.13.4
 
 # chat UI (app/) — FastAPI + uvicorn; SSE via StreamingResponse (Ollama stays on requests)
-fastapi>=0.111
-uvicorn[standard]>=0.29
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
 
 # External (not pip): FastQC 0.12.x  ->  mamba install -c bioconda fastqc
 # External: a local Ollama server + a model (default OLLAMA_MODEL=qwen2.5vl:7b)
