@@ -1,6 +1,5 @@
 # CLEAN machine section. Validates against schemas.py:MetaSection.
 summary: >
-  Aggregates results from many bioinformatics tools (FastQC, STAR, samtools, ...) across samples
-  into a single interactive HTML report plus machine-readable tables. It summarizes existing
+  Aggregates results from many bioinformatics tools (FastQC, STAR, samtools, ...) across samples into a single interactive HTML report plus machine-readable tables. It summarizes existing
   reports; it does not itself measure read quality.
 expectations_ref: rnaseq_qc.yaml

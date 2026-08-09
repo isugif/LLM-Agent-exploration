@@ -1,0 +1,142 @@
+# CLEAN context section (curator-generated). Validates against schemas.py.
+options:
+- flag: --force / -f
+  description: Overwrite any existing reports
+  default: null
+- flag: --config / -c
+  description: Specific config file to load, after those in MultiQC dir / home dir
+    / working dir. (PATH)
+  default: null
+- flag: --cl-config
+  description: Specify MultiQC config YAML on the command line (TEXT)
+  default: null
+- flag: --filename / -n
+  description: Report filename. Use 'stdout' to print to standard out. (TEXT)
+  default: null
+- flag: --outdir / -o
+  description: Create report in the specified output directory. (TEXT)
+  default: null
+- flag: --ignore / -x
+  description: Ignore analysis files (GLOB EXPRESSION)
+  default: null
+- flag: --ignore-samples
+  description: Ignore sample names (GLOB EXPRESSION)
+  default: null
+- flag: --ignore-symlinks
+  description: Ignore symlinked directories and files
+  default: null
+- flag: --file-list / -l
+  description: Supply a file containing a list of file paths to be searched, one per
+    row
+  default: null
+- flag: --module / -m
+  description: Use only this module. Can specify multiple times. (MODULE NAME)
+  default: null
+- flag: --exclude / -e
+  description: Do not use this module. Can specify multiple times. (MODULE NAME)
+  default: null
+- flag: --require-logs
+  description: Require all explicitly requested modules to have log files. If not,
+    MultiQC will exit with an error.
+  default: null
+- flag: --dirs / -d
+  description: Prepend directory to sample names
+  default: null
+- flag: --dirs-depth / -dd
+  description: Prepend n directories to sample names. Negative number to take from
+    start of path. (INTEGER)
+  default: null
+- flag: --fullnames / -s
+  description: Do not clean the sample names (leave as full file name)
+  default: null
+- flag: --fn_as_s_name
+  description: Use the log filename as the sample name
+  default: null
+- flag: --replace-names
+  description: TSV file to rename sample names during report generation (PATH)
+  default: null
+- flag: --title / -i
+  description: Report title. Printed as page header, used for filename if not otherwise
+    specified. (TEXT)
+  default: null
+- flag: --comment / -b
+  description: Custom comment, will be printed at the top of the report. (TEXT)
+  default: null
+- flag: --template / -t
+  description: Report template to use. (default|disco|gathered|geo|original|sections|simple)
+  default: null
+- flag: --sample-names
+  description: TSV file containing alternative sample names for renaming buttons in
+    the report (PATH)
+  default: null
+- flag: --sample-filters
+  description: TSV file containing show/hide patterns for the report (PATH)
+  default: null
+- flag: --custom-css-file
+  description: Custom CSS file to add to the final report (PATH)
+  default: null
+- flag: --flat / -fp
+  description: Use only flat plots (static images)
+  default: null
+- flag: --interactive / -ip
+  description: Use only interactive plots (in-browser Javascript)
+  default: null
+- flag: --export / -p
+  description: Export plots as static images in addition to the report
+  default: null
+- flag: --data-dir/--no-data-dir
+  description: Force the parsed data directory to be created.
+  default: null
+- flag: --data-format / -k
+  description: Output parsed data in a different format. (tsv|csv|json|yaml)
+  default: null
+- flag: --zip-data-dir / -z
+  description: Compress the data directory.
+  default: null
+- flag: --no-report
+  description: Do not generate a report, only export data and plots
+  default: null
+- flag: --clean-up/--no-clean-up
+  description: Remove the temporary directory and log file after finishing
+  default: null
+- flag: --pdf
+  description: Creates PDF report with the 'simple' template. Requires Pandoc to be
+    installed.
+  default: null
+- flag: --verbose / -v
+  description: Increase output verbosity. (INTEGER RANGE)
+  default: null
+- flag: --quiet / -q
+  description: Only show log warnings
+  default: null
+- flag: --no-version-check
+  description: Disable checking the latest MultiQC version on the server
+  default: null
+- flag: --strict
+  description: Don't catch exceptions, run additional code checks to help development.
+  default: null
+- flag: --development,--dev
+  description: Development mode. Do not inline JS and CSS, export uncompressed plot
+    data
+  default: null
+- flag: --profile-runtime
+  description: Add analysis of how long MultiQC takes to run to the report
+  default: null
+- flag: --profile-memory
+  description: Add analysis of how much memory each module uses. Note that tracking
+    memory will increase the runtime, so the runtime metrics could scale up a few
+    times
+  default: null
+- flag: --no-megaqc-upload
+  description: Don't upload generated report to MegaQC, even if MegaQC options are
+    found
+  default: null
+- flag: --no-ansi
+  description: Disable coloured log output
+  default: null
+- flag: --version
+  description: Show the version and exit.
+  default: null
+- flag: --help / -h
+  description: Show this message and exit.
+  default: null

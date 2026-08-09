@@ -1,0 +1,16 @@
+# CLEAN context section (curator-generated). Validates against schemas.py.
+examples:
+- description: Run in the current working directory
+  command: multiqc .
+- description: Overwrite any existing reports
+  command: multiqc -f .
+- description: Create report in a specified output directory
+  command: multiqc -o results/ .
+- description: Use only a specific module
+  command: multiqc -m fastqc .
+- description: Set a report title and custom filename
+  command: multiqc -i "My Report" -n report.html .
+- description: Ignore analysis files matching a glob expression
+  command: multiqc -x "*.tmp" .
+note: Supply one or more directories to scan for analysis results; runs as 'multiqc
+  [OPTIONS] [ANALYSIS DIRECTORY]'.
