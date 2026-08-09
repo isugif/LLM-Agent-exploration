@@ -109,6 +109,24 @@ def test_classify_accepts_history():
     assert it.intent == "explain_tool" and it.tool == "fastqc"
 
 
+def test_backstop_named_tool_overrides_other():
+    from app.intent import _backstop, Intent
+    it = _backstop(Intent(intent="other"), "what does --export do? in multiqc", [])
+    assert it.intent == "explain_tool" and it.tool == "multiqc"
+
+
+def test_backstop_resolves_tool_from_history():
+    from app.intent import _backstop, Intent
+    hist = [{"role": "user", "content": "which parameter in multiqc outputs plots?"},
+            {"role": "assistant", "content": "use --outdir"}]
+    # flag-style follow-up, no tool named -> resolve multiqc from history
+    it = _backstop(Intent(intent="other"), "what does --export do?", hist)
+    assert it.intent == "explain_tool" and it.tool == "multiqc"
+    # explain_tool with unknown tool -> filled from history
+    it2 = _backstop(Intent(intent="explain_tool", tool="unknown"), "I meant the individual pngs", hist)
+    assert it2.tool == "multiqc"
+
+
 def test_add_tool_docs_check_plan():
     from app.capabilities import add_tool as at
     # fastqc already documented -> no source/curate steps in the plan

@@ -55,6 +55,41 @@ def _documented_tools() -> list[str]:
     return available_tools()
 
 
+_FLAG_IN_MSG = re.compile(r"(?:^|\s)--?[A-Za-z][\w-]*")   # a flag-like token, e.g. --export / -p
+
+
+def _named_tool(message: str) -> Optional[str]:
+    low = message.lower()
+    return next((t for t in _documented_tools() if re.search(rf"\b{re.escape(t)}\b", low)), None)
+
+
+def _last_tool(history: Optional[list[dict]]) -> Optional[str]:
+    """The most recently mentioned documented tool in the conversation (memory backstop)."""
+    docs = _documented_tools()
+    for turn in reversed(history or []):
+        low = (turn.get("content") or "").lower()
+        t = next((x for x in docs if re.search(rf"\b{re.escape(x)}\b", low)), None)
+        if t:
+            return t
+    return None
+
+
+def _backstop(intent: Intent, message: str, history: Optional[list[dict]]) -> Intent:
+    """Deterministic corrections for a weak/ambiguous classification — the harness knows which tools
+    are documented and what was just discussed, so it doesn't have to trust the model to route."""
+    named = _named_tool(message)
+    if intent.intent == "other" and named:                      # a documented tool is named
+        intent.intent, intent.tool = "explain_tool", named
+    elif intent.intent == "other" and _FLAG_IN_MSG.search(message) and _last_tool(history):
+        intent.intent, intent.tool = "explain_tool", _last_tool(history)   # "what does --export do?"
+    if intent.intent == "explain_tool":                         # resolve a missing/ambiguous tool
+        if named:
+            intent.tool = named
+        elif not intent.tool or intent.tool == "unknown":
+            intent.tool = _last_tool(history) or "unknown"
+    return intent
+
+
 def _heuristic(message: str) -> Intent:
     """LLM-off fallback: 'run' + FASTQ => run_pipeline; 'install X' => add_tool; a documented tool
     name (no file) => explain_tool; a FASTQ alone => describe_data; else other."""
@@ -85,10 +120,10 @@ def classify(message: str, provider, history: Optional[list[dict]] = None) -> In
             prompt = f"Recent conversation:\n{recent}\n\nNew message: {message}"
         parsed = provider.extract(Intent, system=_SYSTEM, prompt=prompt)
     if parsed is None:
-        return _heuristic(message)
-    if not parsed.files:                       # backstop: catch a path the model overlooked
+        parsed = _heuristic(message)
+    if not parsed.files:                       # catch a path the model overlooked
         parsed.files = FASTQ_RE.findall(message)
-    return parsed
+    return _backstop(parsed, message, history)   # correct weak classification + resolve tool from memory
 
 
 STUB_CAPABILITIES = {
