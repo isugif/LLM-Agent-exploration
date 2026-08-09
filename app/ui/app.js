@@ -428,7 +428,6 @@ $("composer").addEventListener("submit", async (e) => {
   if (inFlight) { if (abortCtrl) abortCtrl.abort(); return; }   // button is "Stop"
   const msg = $("message").value.trim();
   if (!msg) return;
-  const file = $("file").value.trim();
   const provider = $("provider").value;
   inputHistory.push(msg);
   inputHistIdx = -1;
@@ -440,7 +439,7 @@ $("composer").addEventListener("submit", async (e) => {
   convo.push({ role: "user", content: msg });
   inFlight = true; setStopMode(true);
   abortCtrl = new AbortController();
-  try { await send(msg, file, provider, abortCtrl.signal, history); }
+  try { await send(msg, null, provider, abortCtrl.signal, history); }
   catch (err) {
     if (err.name === "AbortError") { addActivity("stopped by user", "err"); }
     else { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }

@@ -62,7 +62,6 @@ body {
   background: var(--card); color: var(--ink); border: 1px solid var(--line);
   border-radius: 8px; padding: 9px 11px; font-size: 14px;
 }
-.composer .file { font-size: 12px; color: var(--muted); }
 .composer .message { flex: 1; }
 .composer button {
   background: var(--accent); color: #04101f; border: 0; border-radius: 8px;
