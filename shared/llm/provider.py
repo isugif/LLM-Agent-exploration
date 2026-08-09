@@ -29,10 +29,21 @@ from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
+# The one place the Ollama endpoint convention lives — nooa_impl/llm.py and the curator's
+# ollama provider import these rather than re-reading the env themselves.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5vl:7b")
 
 LLM_UNAVAILABLE = "[LLM unavailable — deterministic-only]"
+
+
+def ollama_available(host: str = OLLAMA_HOST) -> bool:
+    """Single availability probe shared by every track/module that needs it."""
+    try:
+        requests.get(f"{host}/api/tags", timeout=3).raise_for_status()
+        return True
+    except Exception:                        # noqa: BLE001
+        return False
 
 
 class NullProvider:
@@ -73,8 +84,12 @@ class OllamaProvider:
         return r.json()["message"]["content"]
 
     def extract(self, schema_model: Type[T], system: str, prompt: str) -> Optional[T]:
-        schema = schema_model.model_json_schema()
-        content = self._chat(system, prompt, fmt=schema)
+        # Any failure — server died mid-run, malformed output — degrades to "no answer",
+        # matching the NullProvider contract instead of crashing the node.
+        try:
+            content = self._chat(system, prompt, fmt=schema_model.model_json_schema())
+        except Exception:                    # noqa: BLE001
+            return None
         try:
             return schema_model.model_validate_json(content)
         except Exception:                    # noqa: BLE001 - malformed model output -> treat as no answer
@@ -84,13 +99,22 @@ class OllamaProvider:
                 return None
 
     def complete(self, system: str, prompt: str) -> str:
-        return self._chat(system, prompt)
+        try:
+            return self._chat(system, prompt)
+        except Exception:                    # noqa: BLE001
+            return LLM_UNAVAILABLE
 
 
 def get_provider() -> "OllamaProvider | NullProvider":
     """Return an OllamaProvider if the server responds, else a NullProvider."""
-    try:
-        requests.get(f"{OLLAMA_HOST}/api/tags", timeout=3).raise_for_status()
-        return OllamaProvider()
-    except Exception:                        # noqa: BLE001
-        return NullProvider()
+    return OllamaProvider() if ollama_available() else NullProvider()
+
+
+def provider_by_name(name: Optional[str]) -> "OllamaProvider | NullProvider":
+    """Rebuild a provider from its recorded name WITHOUT re-pinging the server.
+
+    Onboarding resolves availability once per run and records `llm_provider` in state;
+    downstream nodes reconstruct from that name, so one check governs the whole run and the
+    reported provider can't silently flip between nodes.
+    """
+    return OllamaProvider() if name == "ollama" else NullProvider()

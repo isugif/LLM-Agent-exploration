@@ -40,6 +40,16 @@ from nooa_impl.agents.diagnosis import DiagnosisAgent  # noqa: E402
 import shutil  # noqa: E402
 
 
+# out_dirs created during the run (mkdtemp per pipeline case + the multiqc input build);
+# removed after REPORT.md is written so test runs don't accumulate in $TMPDIR.
+TEMP_DIRS: list[str] = []
+
+
+def _cleanup_temp_dirs() -> None:
+    for d in TEMP_DIRS:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def _anyof(expected, actual) -> bool:
     return actual in expected if isinstance(expected, list) else actual == expected
 
@@ -49,9 +59,10 @@ def _build_multiqc_input() -> str | None:
     if shutil.which("fastqc") is None:
         return None
     d = tempfile.mkdtemp(prefix="mqc_in_")
+    TEMP_DIRS.append(d)
     import subprocess
     subprocess.run(["fastqc", "-q", "-o", d, str(REPO / "tests/inputs/good.fastq.gz")],
-                   capture_output=True)
+                   capture_output=True, timeout=300)
     return d
 
 
@@ -63,12 +74,16 @@ def _lg_pipeline(case, fastq) -> dict:
         "question": case["question"], "deliverable": case.get("deliverable") or case["question"],
         "out_dir": None,
     })
+    if final.get("out_dir"):
+        TEMP_DIRS.append(final["out_dir"])
     return _facts(final.get("route"), final.get("run_result"), final.get("verdict"))
 
 
 def _nooa_pipeline(case, fastq) -> dict:
     rep = asyncio.run(run_pipeline(
         fastq, case["question"], case.get("deliverable"), None, tool_id=case["tool"]))
+    if rep.get("out_dir"):
+        TEMP_DIRS.append(rep["out_dir"])
     return _facts(rep.get("route"), rep.get("run_result"), rep.get("verdict"))
 
 
@@ -148,6 +163,7 @@ def main() -> None:
             rows.append((name, track, status, case["expect"], actual, "; ".join(bad)))
 
     _write_report(rows, n_fail)
+    _cleanup_temp_dirs()
     print(f"{'DETERMINISTIC' if DETERMINISTIC else 'LLM'} mode: "
           f"{sum(1 for r in rows if r[2]=='PASS')} pass, {n_fail} fail, "
           f"{sum(1 for r in rows if r[2]=='SKIP')} skip -> tests/REPORT.md")

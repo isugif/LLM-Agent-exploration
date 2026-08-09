@@ -58,13 +58,15 @@ def probe(path: str, sample_reads: int = 10000) -> dict[str, Any]:
                     break
                 if header.startswith("@") and plus.startswith("+"):
                     looks_fastq = True
-                seq = seq.rstrip("\n")
-                qual = qual.rstrip("\n")
+                # rstrip \r too: a CRLF file would otherwise leave \r (13) in the quality
+                # range and force encoding_guess to "unknown"
+                seq = seq.rstrip("\r\n")
+                qual = qual.rstrip("\r\n")
                 lengths.append(len(seq))
-                for c in qual:
-                    o = ord(c)
-                    min_q = min(min_q, o)
-                    max_q = max(max_q, o)
+                if qual:
+                    qb = qual.encode("latin-1", errors="replace")   # bytes min/max, no per-char ord()
+                    min_q = min(min_q, min(qb))
+                    max_q = max(max_q, max(qb))
                 n += 1
     except (OSError, EOFError) as exc:
         return {"format": "unreadable", "error": str(exc)}

@@ -29,9 +29,26 @@ from curator.providers.base import Provider, strip_code_fence
 # 1. tool --help
 # --------------------------------------------------------------------------- #
 
+# Source cap sent to the model AND used by the flag-grounding validators — one constant so the
+# two can't diverge again. Sized to hold long help texts (hisat2/seqkit are 10-25k chars);
+# a flag that fell past a smaller cap would be a false UNGROUNDED_FLAG.
+HELP_CHAR_LIMIT = 32_000
+HELP_CMD_TIMEOUT = 30           # seconds; a --help that blocks (pager/prompt) must not hang curation
+
+
 def _prefix(env: Optional[str]) -> list[str]:
     """Command prefix to run a tool inside a conda env (or nothing for the current env)."""
     return ["conda", "run", "-n", env] if env else []
+
+
+def _capture(args: list[str], timeout: int = HELP_CMD_TIMEOUT) -> str:
+    """Run a help-ish command and return stdout+stderr; '' on timeout or launch failure."""
+    try:
+        p = subprocess.run(args, capture_output=True, text=True, timeout=timeout,
+                           stdin=subprocess.DEVNULL)
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
+    return (p.stdout or "") + (p.stderr or "")
 
 
 def source_from_help(tool: str, extra_help_cmds: tuple[list[str], ...] = (), *, env: Optional[str] = None) -> str:
@@ -43,17 +60,14 @@ def source_from_help(tool: str, extra_help_cmds: tuple[list[str], ...] = (), *, 
         return ""
     chunks: list[str] = []
     for args in ([tool, "--help"], [tool, "-h"]):
-        p = subprocess.run(pre + args, capture_output=True, text=True)
-        text = (p.stdout or "") + (p.stderr or "")
+        text = _capture(pre + args)
         if text.strip():
             chunks.append(text)
             break
-    v = subprocess.run(pre + [tool, "--version"], capture_output=True, text=True)
-    chunks.append((v.stdout or "") + (v.stderr or ""))
+    chunks.append(_capture(pre + [tool, "--version"]))
     for cmd in extra_help_cmds:
-        p = subprocess.run(pre + cmd, capture_output=True, text=True)
-        chunks.append((p.stdout or "") + (p.stderr or ""))
-    return "\n\n".join(chunks)[:8000]
+        chunks.append(_capture(pre + cmd))
+    return "\n\n".join(chunks)[:HELP_CHAR_LIMIT]
 
 
 def version_from_tool(tool: str, *, env: Optional[str] = None) -> Optional[str]:
@@ -61,8 +75,7 @@ def version_from_tool(tool: str, *, env: Optional[str] = None) -> Optional[str]:
     pre = _prefix(env)
     if env is None and shutil.which(tool) is None:
         return None
-    v = subprocess.run(pre + [tool, "--version"], capture_output=True, text=True)
-    m = re.search(r"(?<![\d.])(\d+\.\d+(?:\.\d+)?)", (v.stdout or "") + (v.stderr or ""))
+    m = re.search(r"(?<![\d.])(\d+\.\d+(?:\.\d+)?)", _capture(pre + [tool, "--version"]))
     return m.group(1) if m else None
 
 

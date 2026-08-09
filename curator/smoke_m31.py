@@ -43,7 +43,7 @@ def main() -> None:
 
     # 3) migration + fill(): extract a CLEAN InstallSection from the STALE prose install.yml
     line("3) fill() clean InstallSection from the stale prose install.yml (0.11.9)")
-    provider = registry.resolve("source_transfer", override="ollama")
+    provider = registry.resolve("transfer", override="ollama")
     print(f"  provider: {provider.name}")
     example = InstallSection.model_validate(yaml.safe_load((CLEAN / "install.yml").read_text()))
     obj = fill(
