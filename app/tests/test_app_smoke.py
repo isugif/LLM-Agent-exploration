@@ -39,31 +39,26 @@ def test_profile_fastq(fastq):
     assert prof["qual_by_pos"][0] == pytest.approx(40.0)   # 'I' = 73 -> Q40
 
 
-def test_intent_heuristic_offline():
-    null = NullProvider()
-    assert classify("tell me about reads.fastq.gz", null).intent == "describe_data"
-    assert classify("hello there", null).intent == "other"
+def ground(message, history=None):
+    """classify (offline -> 'other') then apply the deterministic resolver, as the router does."""
+    from app import resolve
+    it = classify(message, NullProvider(), history=history)
+    resolve.resolve(it, message, history)
+    return it
 
 
 def test_intent_is_typed():
     assert Intent().intent == "other"
 
 
-def test_intent_run_pipeline_offline():
-    null = NullProvider()
-    it = classify("run fastqc on reads.fastq.gz", null)
-    assert it.intent == "run_pipeline"
-    assert it.tool == "fastqc"
-    assert it.files == ["reads.fastq.gz"]
-
-
-def test_intent_add_tool_offline():
-    null = NullProvider()
-    assert classify("install seqkit", null).intent == "add_tool"
-    assert classify("install seqkit", null).tool == "seqkit"
-    assert classify("add the tool star", null).tool == "star"
-    # "run fastqc on x.fastq" must still win as run_pipeline, not add_tool
-    assert classify("run fastqc on x.fastq.gz", null).intent == "run_pipeline"
+def test_resolve_offline_routing():
+    assert ground("tell me about reads.fastq.gz").intent == "describe_data"
+    assert ground("hello there").intent == "other"
+    it = ground("run fastqc on reads.fastq.gz")
+    assert it.intent == "run_pipeline" and it.tool == "fastqc" and it.files == ["reads.fastq.gz"]
+    assert ground("install seqkit").intent == "add_tool"
+    assert ground("install seqkit").tool == "seqkit"
+    assert ground("add the tool star").tool == "star"
 
 
 def test_add_tool_event_mapping():
@@ -76,13 +71,12 @@ def test_add_tool_event_mapping():
     assert "couldn't install" in at.summary_line("nope", False, None, 0, [], False)
 
 
-def test_intent_explain_tool_offline():
-    null = NullProvider()
-    assert classify("tell me about fastqc", null).intent == "explain_tool"
-    assert classify("tell me about fastqc", null).tool == "fastqc"
-    assert classify("what parameters does fastqc have?", null).intent == "explain_tool"
-    # a run/install request still wins over explain
-    assert classify("install fastqc", null).intent == "add_tool"
+def test_resolve_explain_tool_offline():
+    assert ground("tell me about fastqc").intent == "explain_tool"
+    assert ground("tell me about fastqc").tool == "fastqc"
+    assert ground("what parameters does fastqc have?").intent == "explain_tool"
+    # an install request still wins over explain
+    assert ground("install fastqc").intent == "add_tool"
 
 
 def test_explain_tool_workbook_and_run():
@@ -103,28 +97,27 @@ def test_explain_tool_history_is_bounded():
     assert len(et._history_text(huge)) <= et.HIST_CAP   # sliding-window budget respected
 
 
-def test_classify_accepts_history():
-    # history is optional and must not break the offline heuristic path
-    it = classify("tell me about fastqc", NullProvider(), history=[{"role": "user", "content": "hi"}])
-    assert it.intent == "explain_tool" and it.tool == "fastqc"
-
-
-def test_backstop_named_tool_overrides_other():
-    from app.intent import _backstop, Intent
-    it = _backstop(Intent(intent="other"), "what does --export do? in multiqc", [])
+def test_resolve_named_tool_overrides_other():
+    from app import resolve
+    it = Intent(intent="other")
+    resolve.resolve(it, "what does --export do? in multiqc", [])
     assert it.intent == "explain_tool" and it.tool == "multiqc"
 
 
-def test_backstop_resolves_tool_from_history():
-    from app.intent import _backstop, Intent
+def test_resolve_tool_from_history_and_missing_slot():
+    from app import resolve
     hist = [{"role": "user", "content": "which parameter in multiqc outputs plots?"},
             {"role": "assistant", "content": "use --outdir"}]
-    # flag-style follow-up, no tool named -> resolve multiqc from history
-    it = _backstop(Intent(intent="other"), "what does --export do?", hist)
+    it = Intent(intent="other")
+    resolve.resolve(it, "what does --export do?", hist)      # flag-style follow-up, tool from memory
     assert it.intent == "explain_tool" and it.tool == "multiqc"
-    # explain_tool with unknown tool -> filled from history
-    it2 = _backstop(Intent(intent="explain_tool", tool="unknown"), "I meant the individual pngs", hist)
+    it2 = Intent(intent="explain_tool", tool="unknown")
+    resolve.resolve(it2, "I meant the individual pngs", hist)
     assert it2.tool == "multiqc"
+    # missing-slot check drives the uniform clarifying question
+    assert resolve.missing_slot(Intent(intent="explain_tool", tool="unknown")) == "tool"
+    assert resolve.missing_slot(Intent(intent="describe_data")) == "file"
+    assert resolve.missing_slot(Intent(intent="explain_tool", tool="fastqc")) is None
 
 
 def test_add_tool_docs_check_plan():
