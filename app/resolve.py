@@ -28,6 +28,14 @@ _ADD_RE = re.compile(r"\b(?:install|add(?:\s+the)?(?:\s+tool)?)\s+([A-Za-z0-9][\
 _FIND_RE = re.compile(
     r"\b(?:which|what|whats|recommend|suggest|best|any|is there a?)\b.{0,40}"
     r"\b(?:tool|tools|program|programs|software|package)\b", re.IGNORECASE)
+# a first-person, past-tense recall question about THIS session's runs -> session_query
+_SESSION_RE = re.compile(
+    r"(?:\bdid i\b|\bhave i\b|\bi (?:ran|did|already)\b"
+    r"|\bmy (?:run|runs|results?|output|outputs|session)\b"
+    r"|\b(?:last|previous|earlier) run\b"
+    r"|\bwhere\b.{0,40}\b(?:output|outputs|results?|wrote|saved|write)\b"
+    r"|\bwhat (?:were|was|are)\b.{0,40}\b(?:results?|verdict|output|summary|metrics?)\b"
+    r"|\bresults?\b.{0,20}\bagain\b)", re.IGNORECASE)
 
 # Slots each intent needs before it can act. If unresolved after grounding, the router asks.
 # (run_pipeline's tool defaults to fastqc, so only `file` is required.)
@@ -87,15 +95,27 @@ def find_tool_question(message: str) -> bool:
     return bool(_FIND_RE.search(message or ""))
 
 
+def session_question(message: str) -> bool:
+    return bool(_SESSION_RE.search(message or ""))
+
+
 def resolve(intent, message: str, history: Optional[list[dict]]) -> list[str]:
     """Mutate `intent` in place: correct classification + fill slots. Returns human-readable notes."""
     notes: list[str] = []
     named = tool_in(message)
     fq = fastq_in(message)
 
-    # 0) find_tool: a discovery question with no specific tool named and no file to act on. Corrects
+    # 0a) session_query: a first-person recall question about past runs ("where did I write the
+    #     fastqc output", "what were the results"). Checked BEFORE find_tool so "which tool did I
+    #     run?" is recall, not discovery. Gated on no file (a file present means describe/run).
+    if not fq and session_question(message) and \
+            intent.intent in ("other", "explain_tool", "find_tool", "describe_data", "propose_strategy"):
+        intent.intent = "session_query"
+        notes.append("intent=session_query (recall about this session's runs)")
+
+    # 0b) find_tool: a discovery question with no specific tool named and no file to act on. Corrects
     #    both a non-committal 'other' and a weak model that guessed 'explain_tool' without a tool.
-    if not named and not fq and find_tool_question(message) and \
+    elif not named and not fq and find_tool_question(message) and \
             intent.intent in ("other", "explain_tool", "propose_strategy"):
         intent.intent = "find_tool"
         notes.append("intent=find_tool (cross-tool discovery, no tool named)")

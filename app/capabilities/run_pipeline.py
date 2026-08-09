@@ -22,12 +22,15 @@ PLAN = ["onboarding", "judgment", "execution", "evaluation"]
 
 
 def stage_events(message: str, tool: str, file: str,
-                 provider: str = "auto") -> Iterator[tuple[str, dict]]:
+                 provider: str = "auto", out_dir: Optional[str] = None) -> Iterator[tuple[str, dict]]:
     """Blocking generator: yield (node_name, delta) as the pipeline runs. `provider` selects the LLM
-    each harness node uses (onboarding/judgment/evaluation), honoring the UI dropdown."""
+    each harness node uses (onboarding/judgment/evaluation), honoring the UI dropdown. `out_dir`, when
+    given, is a durable session-scoped output directory (else the execution node mkdtemps one)."""
     graph = build_graph()
     state = {"tool": tool, "fastq": file, "question": message, "deliverable": message,
              "provider": provider}
+    if out_dir:
+        state["out_dir"] = out_dir
     for update in graph.stream(state):
         for node, delta in update.items():
             yield node, delta

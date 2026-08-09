@@ -21,8 +21,9 @@ from starlette.concurrency import run_in_threadpool
 
 from shared.llm.provider import get_provider
 from app import resolve
+from app.session import STORE
 from app.intent import classify, stub_text
-from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool, find_tool
+from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool, find_tool, session_query
 
 
 class ChatRequest(BaseModel):
@@ -30,6 +31,7 @@ class ChatRequest(BaseModel):
     provider: str | None = None            # 'ollama' | 'claude' | 'auto'/None
     file: str | None = None                # optional explicit file path from the UI
     history: list[dict] = []               # prior turns [{role, content}] for context (memory)
+    session_id: str | None = None          # persistent session id (UI localStorage); validated server-side
 
 
 def _sse(event: str, data: str) -> str:
@@ -64,6 +66,7 @@ def make_chat_router() -> APIRouter:
     @router.post("/api/chat")
     async def chat(req: ChatRequest):
         provider = get_provider(req.provider)
+        sid = STORE.ensure(req.session_id)          # validated/minted; echoed back so the UI persists it
 
         async def gen():
             yield _sse("log", json.dumps({"text": f"Classifying request (model: {provider.name})…"}))
@@ -71,7 +74,7 @@ def make_chat_router() -> APIRouter:
             if req.file and not intent.files:            # explicit UI file field
                 intent.files = [req.file]
             notes = resolve.resolve(intent, req.message, req.history)   # deterministic grounding
-            yield _sse("meta", json.dumps({"provider": provider.name, "intent": intent.intent}))
+            yield _sse("meta", json.dumps({"provider": provider.name, "intent": intent.intent, "sid": sid}))
             for n in notes:
                 yield _sse("log", json.dumps({"text": f"grounded: {n}"}))
 
@@ -95,9 +98,13 @@ def make_chat_router() -> APIRouter:
                 tool = intent.tool if intent.tool and intent.tool != "unknown" else "fastqc"
                 yield _sse("log", json.dumps({"text": f"Running {tool} on {file}…"}))
                 yield _sse("plan", json.dumps({"steps": run_pipeline.PLAN}))
+                out_dir = str(STORE.run_dir(sid, tool))   # durable, under the session dir
                 action = verdict_status = None
+                metrics: dict = {}
+                findings: list = []
                 async for kind, payload in _abridge(
-                        lambda: run_pipeline.stage_events(req.message, tool, file, req.provider or "auto")):
+                        lambda: run_pipeline.stage_events(req.message, tool, file,
+                                                          req.provider or "auto", out_dir)):
                     if kind == "error":
                         yield _sse("stage", json.dumps({"stage": "error", "title": "Error", "error": payload}))
                         continue
@@ -107,7 +114,13 @@ def make_chat_router() -> APIRouter:
                         action = ev.get("action")
                     if ev["stage"] in ("evaluation", "diagnosis"):
                         verdict_status = ev.get("status")
+                        metrics = ev.get("metrics", {}) or metrics
+                        findings = ev.get("findings", []) or findings
                     yield _sse("stage", json.dumps(ev))
+                STORE.append_run(sid, {"tool": tool, "question": req.message, "file": file,
+                                       "out_dir": out_dir, "action": action,
+                                       "verdict_status": verdict_status, "metrics": metrics,
+                                       "findings": findings})
                 yield _sse("prose", json.dumps(
                     {"text": run_pipeline.summary_line(action, verdict_status, tool)}))
 
@@ -150,11 +163,28 @@ def make_chat_router() -> APIRouter:
                     yield _sse("panel", json.dumps(result["panel"]))
                 yield _sse("prose", json.dumps({"text": result.get("prose", "")}))
 
+            elif intent.intent == "session_query":
+                yield _sse("log", json.dumps({"text": "Recalling this session's runs…"}))
+                result = await run_in_threadpool(session_query.run, req.message, sid, provider)
+                if result.get("panel") is not None:
+                    yield _sse("panel", json.dumps(result["panel"]))
+                yield _sse("prose", json.dumps({"text": result.get("prose", "")}))
+
             else:
                 yield _sse("prose", json.dumps({"text": stub_text(intent)}))
 
             yield _sse("done", "{}")
 
         return StreamingResponse(gen(), media_type="text/event-stream")
+
+    @router.get("/api/sessions")
+    def list_sessions() -> dict:
+        """Prior sessions (newest-first) for the reload/continue picker."""
+        return {"sessions": STORE.list_sessions()}
+
+    @router.get("/api/sessions/{sid}/runs")
+    def session_runs(sid: str) -> dict:
+        """The run history of one session (for reloading it into the panel)."""
+        return {"sid": sid, "runs": STORE.load_runs(sid)}
 
     return router

@@ -136,6 +136,61 @@ def test_chat_find_tool_sse(offline):
     assert "fastqc" in {t["tool"] for t in panel["tools"]}
 
 
+def test_resolve_session_query_offline():
+    for q in ("where did I write the fastqc output?", "what were the results of the summary again?",
+              "what have I run so far?", "which tool did I run?"):
+        assert ground(q).intent == "session_query", q
+    # recall wins over discovery, but a plain discovery stays find_tool
+    assert ground("which tool takes fastq?").intent == "find_tool"
+    from app import resolve
+    assert resolve.missing_slot(Intent(intent="session_query")) is None
+
+
+@pytest.fixture()
+def session_dir(tmp_path, monkeypatch):
+    """Point the session store at a tmp dir so tests never touch ~/.bio_chat."""
+    import importlib
+    monkeypatch.setenv("BIO_CHAT_SESSIONS", str(tmp_path))
+    import app.session as s
+    importlib.reload(s)                      # rebuild STORE against the tmp base_dir
+    import app.capabilities.session_query as sq
+    import app.api.routes_chat as rc
+    importlib.reload(sq); importlib.reload(rc)
+    return tmp_path
+
+
+def test_session_query_run_then_recall(session_dir):
+    from app.session import STORE
+    from app.capabilities import session_query as sq
+    sid = STORE.ensure(None)
+    STORE.append_run(sid, {"tool": "fastqc", "question": "qc these", "out_dir": "/out/fastqc-1",
+                           "action": "run", "verdict_status": "anomaly",
+                           "metrics": {"per_base_mean_quality": {"value": 38.5, "tier": "ok"}},
+                           "findings": ["percent_gc=52 -> WARN"]})
+    where = sq.run("where did I write the fastqc output?", sid, NullProvider())
+    assert "/out/fastqc-1" in where["prose"]
+    assert where["panel"]["kind"] == "session" and where["panel"]["count"] == 1
+    result = sq.run("what were the results?", sid, NullProvider())
+    assert "anomaly" in result["prose"]
+    # empty session is honest, not invented
+    empty = sq.run("what did I run?", STORE.ensure(None), NullProvider())
+    assert "haven't run anything" in empty["prose"]
+
+
+def test_chat_echoes_sid_and_lists_sessions(session_dir, offline):
+    client = TestClient(create_app())
+    r = client.post("/api/chat", json={"message": "which tool takes fastq?", "provider": "auto"})
+    assert r.status_code == 200
+    meta = json.loads(_parse_sse(r.text)["meta"])
+    sid = meta["sid"]
+    assert len(sid) == 32                     # server minted + echoed a session id
+    # a second call reusing the sid, then it should appear in the sessions list
+    client.post("/api/chat", json={"message": "hello", "provider": "auto", "session_id": sid})
+    listed = client.get("/api/sessions").json()["sessions"]
+    assert sid in {s["sid"] for s in listed}
+    assert client.get(f"/api/sessions/{sid}/runs").json()["sid"] == sid
+
+
 def test_resolve_named_tool_overrides_other():
     from app import resolve
     it = Intent(intent="other")

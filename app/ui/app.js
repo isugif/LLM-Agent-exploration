@@ -127,6 +127,17 @@ async function* sse(resp) {
 
 let convo = [];   // [{role, content}] conversation memory (a bounded window is sent each turn)
 
+// ---- persistent session id: points at the current on-disk session (server holds the run-log) ----
+function newSid() {
+  const u = (crypto.randomUUID && crypto.randomUUID()) ||
+    "xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  return u.replace(/-/g, "");
+}
+let sid = localStorage.getItem("bioSid") || newSid();
+localStorage.setItem("bioSid", sid);
+
 function addMsg(text, who, cls) {
   const div = document.createElement("div");
   div.className = "msg " + who + (cls ? " " + cls : "");
@@ -140,7 +151,7 @@ async function send(message, file, provider, signal, history) {
   const resp = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, file: file || null, provider, history: history || [] }),
+    body: JSON.stringify({ message, file: file || null, provider, history: history || [], session_id: sid }),
     signal,
   });
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
@@ -152,6 +163,7 @@ async function send(message, file, provider, signal, history) {
     for await (const { event, data } of sse(resp)) {
       if (event === "meta") {
         const m = JSON.parse(data);
+        if (m.sid && m.sid !== sid) { sid = m.sid; localStorage.setItem("bioSid", sid); }
         addActivity(`intent: ${m.intent} · model: ${m.provider}`, "meta");
         term(`[meta] intent=${m.intent} model=${m.provider}`);
       } else if (event === "plan") {
@@ -165,6 +177,7 @@ async function send(message, file, provider, signal, history) {
         let html, mode, note;
         if (p.kind === "tool") { html = toolPanelHTML(p); mode = "tool"; note = "documentation ready"; }
         else if (p.kind === "catalog") { html = catalogPanelHTML(p); mode = "catalog"; note = "tool matches ready"; }
+        else if (p.kind === "session") { html = sessionPanelHTML(p); mode = "session"; note = "session history ready"; }
         else { html = dataPanelHTML(p); mode = "profile"; note = "data profile ready"; }
         setOutput(html, mode);
         addActivity(note, "ok");
@@ -271,6 +284,22 @@ function toolPanelHTML(p) {
   }
   if (p.boundaries && p.boundaries.length) h += cardHTML("Off-label boundaries", list(p.boundaries));
   if (p.citation) h += cardHTML("Citation", `<code>${esc(p.citation)}</code>`);
+  return h;
+}
+
+function sessionPanelHTML(p) {
+  let h = `<div><h2>Session runs${p.count != null ? ` (${p.count})` : ""}</h2>
+    <div class="file-name">this analysis session</div></div>`;
+  if (!p.runs || !p.runs.length) {
+    return h + cardHTML("No runs yet", `<span class="muted">Run a tool and it will be recorded here.</span>`);
+  }
+  for (const r of p.runs) {
+    const v = r.verdict || r.action || "?";
+    const cls = v === "ok" ? "badge-ok" : (v === "refuse" || v === "failure") ? "badge-bad" : "badge-warn";
+    const body = `<span class="badge ${cls}">${esc(v)}</span>` +
+      kvTable({ when: r.when, output: r.out_dir, question: r.question });
+    h += cardHTML(esc(r.tool || "run"), body);
+  }
   return h;
 }
 
@@ -396,6 +425,54 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ---- sessions: list past sessions, reload one (explore), or start fresh (Part 2) ----
+async function populateSessions() {
+  let list = [];
+  try { list = (await (await fetch("/api/sessions")).json()).sessions || []; } catch (e) { /* offline */ }
+  const sel = $("session-select");
+  const opts = [`<option value="__new__">＋ new session</option>`];
+  if (!list.some((s) => s.sid === sid)) opts.push(`<option value="${sid}">current (unsaved)</option>`);
+  for (const s of list) {
+    const when = (s.created || "").replace("T", " ").replace("+00:00", "");
+    const q = s.last_question ? " · " + esc(s.last_question.slice(0, 28)) : "";
+    opts.push(`<option value="${s.sid}">${when} · ${s.n_runs} run${s.n_runs === 1 ? "" : "s"}${q}</option>`);
+  }
+  sel.innerHTML = opts.join("");
+  sel.value = sid;
+}
+
+function runsToPanel(runs) {
+  return {
+    kind: "session", count: runs.length,
+    runs: runs.slice().reverse().map((r) => ({
+      tool: r.tool, when: (r.ts || "").replace("T", " ").replace("+00:00", " UTC"),
+      action: r.action, verdict: r.verdict_status, out_dir: r.out_dir, question: r.question,
+    })),
+  };
+}
+
+async function switchSession(target) {
+  if (target === "__new__") {
+    sid = newSid(); localStorage.setItem("bioSid", sid);
+    convo = []; addMsg("Started a new session.", "assistant");
+    await populateSessions();
+    return;
+  }
+  sid = target; localStorage.setItem("bioSid", sid);
+  convo = [];
+  addMsg(`Loaded session ${sid.slice(0, 8)}…`, "assistant");
+  try {
+    const runs = (await (await fetch(`/api/sessions/${sid}/runs`)).json()).runs || [];
+    startTurn(`session ${sid.slice(0, 8)}`);
+    setOutput(sessionPanelHTML(runsToPanel(runs)), "session");
+    switchTab("output");
+  } catch (e) { addMsg("Couldn't load that session.", "assistant", "warn"); }
+  await populateSessions();
+}
+
+$("session-select").addEventListener("change", (e) => switchSession(e.target.value));
+populateSessions();
+
 // ---- tabs (Output / Activity / Terminal) ----
 let currentTab = "output";
 function switchTab(name) {
@@ -470,5 +547,8 @@ $("composer").addEventListener("submit", async (e) => {
     if (err.name === "AbortError") { addActivity("stopped by user", "err"); }
     else { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }
   }
-  finally { inFlight = false; setStopMode(false); abortCtrl = null; $("message").focus(); }
+  finally {
+    inFlight = false; setStopMode(false); abortCtrl = null; $("message").focus();
+    populateSessions();          // pick up a newly-recorded run / the now-saved session
+  }
 });
