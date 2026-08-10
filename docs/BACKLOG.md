@@ -356,6 +356,29 @@ Gated by [item 2]'s eval harness (you need the scorecard to prove a fine-tune ac
 
 ---
 
+## Batch / multi-file run inputs (globs, lists, "all fastqs in a dir")
+
+**Status:** 📋 scoped
+
+**What:** Today `run_pipeline` runs **one** input per turn — you must name each file separately. Let a
+run request name **many** inputs: a glob (`run fastqc on wt*`), a comma/space list
+(`run fastqc on wt1.fastq.gz, wt2.fastq.gz`), or a directory sweep (`run fastqc on all fastqs in
+<dir>`). Expand the pattern against the **working directory** (`app/workdir.py`) into a concrete file
+list, then run the four-harness pipeline **once per file**, streaming each with a per-file header, and
+finish with an aggregate summary (N ok / M refused / …). Each still lands in its own session run dir —
+so a subsequent `run multiqc` (now defaulting to the session `runs/` dir) aggregates them.
+
+**Why it matters:** the replicated designs we build for (3 WT + 3 snf2Δ) are inherently multi-file;
+one-at-a-time is the main friction in the QC→align→aggregate flow. Pairs naturally with the MultiQC
+session-dir default already shipped.
+
+**Rough shape:** (a) resolver: a `inputs_in(message)` that returns a **list** — glob via
+`Path(workdir).glob`, split a delimited list, or enumerate a dir by extension; prefer the workdir,
+keep the single-file path intact when only one matches. (b) `run_pipeline.stage_events` (or the route)
+loops over the list, minting a session run dir per file; the UI already keys output/activity per turn,
+so emit a per-file sub-header + a final roll-up `prose`. (c) guard the count (confirm before running,
+say, >8). Deferred from the MultiQC-dir-input fix; requested next.
+
 <!-- Template for new items:
 
 ## <short title>

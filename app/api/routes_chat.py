@@ -57,6 +57,14 @@ def _tool_extra_inputs(tool: str) -> tuple[bool, bool, bool]:
             PROBES.get(tool) is probe_alignment)
 
 
+def _tool_takes_report_dir(tool: str) -> bool:
+    """True if the tool aggregates a DIRECTORY of reports (MultiQC) rather than a single file —
+    so its input should be resolved as a directory, defaulting to the session's runs/ dir."""
+    from shared.tools.registry import PROBES
+    from shared.probes.report_dir_probe import probe_report_dir
+    return PROBES.get(tool) is probe_report_dir
+
+
 def _existing_path(p: str | None) -> str | None:
     """Resolve a user-typed data path against the active working directory (app/workdir.py) — the
     folder the app was launched in, or one set from chat — with a shared/data fallback for demos."""
@@ -117,6 +125,21 @@ def make_chat_router() -> APIRouter:
             runs = STORE.load_runs(sid)
             session_ctx = {"has_runs": bool(runs), "tools": sorted({r.get("tool") for r in runs if r.get("tool")})}
             notes = resolve.resolve(intent, req.message, req.history, session_ctx)   # deterministic grounding
+
+            # aggregator tools (MultiQC) take a DIRECTORY of reports, not a typed filename. Use an
+            # explicit path from the message, else default to THIS session's runs/ dir so "run
+            # multiqc" just aggregates everything run so far. Also satisfies the file slot so the
+            # router doesn't ask for a FASTQ (and never back-fills a stale one from history).
+            if intent.intent == "run_pipeline":
+                _named = intent.tool if intent.tool and intent.tool != "unknown" else "fastqc"
+                _tool = _resolve_tool_name(_named)
+                if _tool and _tool_takes_report_dir(_tool):
+                    d = _existing_path(resolve.path_in(req.message))
+                    if not (d and os.path.isdir(d)):
+                        d = str(STORE.runs_dir(sid))
+                    intent.files = [d]
+                    notes.append(f"{_tool} input dir = {d}")
+
             dataset.set_context(f"chat:{intent.intent}")   # tag this turn's LLM calls
             dataset.record("intent", model=provider.name, prompt=req.message,
                            response=intent.intent, labels={"intent": intent.intent})

@@ -236,6 +236,36 @@ def test_chat_workdir_api_and_dispatch(session_dir, offline, tmp_path, reset_wor
     assert workdir.get_workdir() == data
 
 
+def test_multiqc_input_is_a_directory():
+    """MultiQC's input is resolved as a DIRECTORY (path token, not a typed filename) — the fix for
+    'run multiqc on /…/runs/' silently back-filling a stale FASTQ."""
+    import app.api.routes_chat as rc
+    from app import resolve
+    assert rc._tool_takes_report_dir("multiqc") is True
+    assert rc._tool_takes_report_dir("fastqc") is False
+    assert resolve.path_in("run multiqc on the files in /Users/a/.bio_chat/runs/") == \
+        "/Users/a/.bio_chat/runs/"
+    assert resolve.path_in("aggregate shared/data/reports") == "shared/data/reports"
+    assert resolve.path_in("can you run multiqc") is None       # no path -> caller defaults to runs/
+
+
+def test_multiqc_defaults_to_session_runs_dir(session_dir, offline, monkeypatch):
+    """'run multiqc' with no path defaults to this session's runs/ dir and reaches JUDGMENT (not the
+    'which FASTQ?' ask, not not_a_dir) — refusing only because the empty session has no reports."""
+    import app.api.routes_chat as rc
+    from app.intent import Intent
+    from app.session import STORE
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:1")     # deterministic: no live LLM
+    monkeypatch.setattr(rc, "classify", lambda m, p, history=None: Intent(intent="run_pipeline", tool="multiqc"))
+    client = TestClient(create_app())
+    ev = _parse_sse(client.post("/api/chat", json={"message": "can you run multiqc"}).text)
+    stage = json.loads(ev["stage"])                             # last stage on a refusal = judgment
+    assert stage["stage"] == "judgment" and stage["action"] == "refuse"
+    assert any("reports_present" in f for f in stage["precondition_failures"])   # empty session
+    assert "refused to run **multiqc**" in json.loads(ev["prose"])["text"]
+    assert STORE.runs_dir(STORE.list_sessions()[0]["sid"]).is_dir()             # the default dir exists
+
+
 def test_run_pipeline_tool_name_resolution(session_dir, offline, monkeypatch, fastq):
     """A user-typed tool name is resolved (minimap->minimap2) or handled gracefully (bwa),
     never crashing on a missing manifest — the bug from the 'using minimap' session."""
