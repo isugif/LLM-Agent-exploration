@@ -109,6 +109,18 @@ def gtf_in(text: str) -> Optional[str]:
     return m[0] if m else None
 
 
+# a path-like token: absolute/home/relative, or any word containing a slash (e.g. a directory to
+# aggregate). Used for aggregator tools whose input is a DIRECTORY, not a typed filename.
+PATH_RE = re.compile(r"(?:~|\.{1,2})?/[^\s]+|[A-Za-z0-9._-]+/[^\s]*")
+
+
+def path_in(text: str) -> Optional[str]:
+    """The first path-like token in the message (for a directory argument). Trailing punctuation
+    trimmed. `None` if the message names no path."""
+    m = PATH_RE.search(text or "")
+    return m.group(0).rstrip(".,;)") if m else None
+
+
 def flag_in(text: str) -> bool:
     return bool(FLAG_RE.search(text or ""))
 

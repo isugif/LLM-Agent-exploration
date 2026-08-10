@@ -77,6 +77,14 @@ class SessionStore:
         d.mkdir(parents=True, exist_ok=True)
         return d
 
+    def runs_dir(self, sid: str) -> Path:
+        """The <sid>/runs/ parent holding every run's output — the natural directory for an
+        aggregator (MultiQC) to scan across this session's runs. Created if absent."""
+        sid = self.ensure(sid)
+        d = self.base_dir / sid / "runs"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
     # -- reports (serving a run's HTML output) -------------------------------
 
     _RUN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")   # a run-dir basename — no path parts
