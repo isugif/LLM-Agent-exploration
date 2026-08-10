@@ -71,10 +71,33 @@ class SessionStore:
         sanitized to a safe slug so it can't alter the path."""
         sid = self.ensure(sid)
         slug = re.sub(r"[^A-Za-z0-9._-]", "_", tool or "run")[:40]
-        stamp = (ts or _now()).replace(":", "").replace("-", "")
+        # URL-safe stamp (drop the tz offset + all separators) so the report link needs no encoding
+        stamp = re.sub(r"[^0-9T]", "", (ts or _now()).split("+", 1)[0])
         d = self.base_dir / sid / "runs" / f"{slug}-{stamp}"
         d.mkdir(parents=True, exist_ok=True)
         return d
+
+    # -- reports (serving a run's HTML output) -------------------------------
+
+    _RUN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")   # a run-dir basename — no path parts
+
+    def report_file(self, sid: str, run_name: str) -> Optional[Path]:
+        """The HTML report inside <sid>/runs/<run_name>/, or None. Path-traversal safe: sid is
+        validated (32-hex) and run_name must be a bare basename that resolves back inside runs/."""
+        try:
+            runs_root = self.session_dir(sid) / "runs"
+        except KeyError:
+            return None
+        if not self._RUN_RE.match(run_name or ""):
+            return None
+        run_dir = (runs_root / run_name).resolve()
+        if runs_root.resolve() not in run_dir.parents or not run_dir.is_dir():
+            return None
+        for pattern in ("*_fastqc.html", "multiqc_report.html", "*.html"):
+            hits = sorted(run_dir.glob(pattern))
+            if hits:
+                return hits[0]
+        return None
 
     # -- the run-log ---------------------------------------------------------
 
@@ -89,6 +112,17 @@ class SessionStore:
                 fh.write("\n")
         except Exception:  # noqa: BLE001
             pass
+
+    def session_meta(self, sid: str) -> dict[str, Any]:
+        """The session's meta.json ({created, ...}), or {} for an unknown session."""
+        try:
+            path = self.session_dir(sid) / "meta.json"
+        except KeyError:
+            return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
 
     def load_runs(self, sid: str) -> list[dict[str, Any]]:
         """All run records for a session, oldest-first ([] for an unknown/empty session)."""

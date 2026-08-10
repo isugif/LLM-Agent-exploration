@@ -177,6 +177,56 @@ def test_session_query_run_then_recall(session_dir):
     assert "haven't run anything" in empty["prose"]
 
 
+def test_session_aware_output_routing():
+    """A question about a run's OUTPUT resolves to recall when the session has runs — the
+    'what can you tell me about the fastqc output?' -> 'which file?' bug."""
+    from app.intent import classify
+    from app import resolve
+    def route(msg, session=None):
+        it = classify(msg, NullProvider()); resolve.resolve(it, msg, [], session); return it.intent
+    has = {"has_runs": True, "tools": ["fastqc"]}
+    none = {"has_runs": False, "tools": []}
+    assert route("what can you tell me about the fastqc output?", has) == "session_query"
+    assert route("show me the results", has) == "session_query"
+    # without runs it must NOT hijack, and a named tool still explains
+    assert route("what can you tell me about the fastqc output?", none) != "session_query"
+    # a real file question is still describe_data even with runs present
+    assert route("what can you tell me about reads.fastq.gz", has) == "describe_data"
+
+
+def test_session_meta_facet_generalizes(session_dir):
+    """'about this session' questions (id/size/tools) answer even on an empty session, and route."""
+    from app.session import STORE
+    from app.capabilities import session_query as sq
+    from app.intent import classify
+    from app import resolve
+    def route(msg, session=None):
+        it = classify(msg, NullProvider()); resolve.resolve(it, msg, [], session); return it.intent
+    for q in ("what session is this?", "what's my session id?", "how many runs have I done?",
+              "what tools have I used?"):
+        assert route(q, {"has_runs": False, "tools": []}) == "session_query", q
+    sid = STORE.ensure(None)
+    empty = sq.run("what session is this?", sid, NullProvider())
+    assert sid in empty["prose"] and empty["panel"]["kind"] == "session"
+    assert empty["panel"]["sid"] == sid                     # id surfaced in the panel too
+    STORE.append_run(sid, {"tool": "fastqc", "question": "qc", "out_dir": "/x", "action": "run"})
+    full = sq.run("how many runs have I done?", sid, NullProvider())
+    assert "1 run" in full["prose"] and "fastqc" in full["prose"]
+
+
+def test_report_route_serves_and_rejects(session_dir):
+    from app.session import STORE
+    sid = STORE.ensure(None)
+    run = STORE.run_dir(sid, "fastqc")
+    (run / "SRR_fastqc.html").write_text("<html><body>FASTQC REPORT</body></html>")
+    client = TestClient(create_app())
+    ok = client.get(f"/api/sessions/{sid}/report", params={"run": run.name})
+    assert ok.status_code == 200 and "FASTQC REPORT" in ok.text
+    assert client.get(f"/api/sessions/{sid}/report", params={"run": "../../etc/passwd"}).status_code == 404
+    assert client.get("/api/sessions/nothex/report", params={"run": run.name}).status_code == 404
+    assert STORE.report_file(sid, "no_such_run") is None
+
+
 def test_chat_echoes_sid_and_lists_sessions(session_dir, offline):
     client = TestClient(create_app())
     r = client.post("/api/chat", json={"message": "which tool takes fastq?", "provider": "auto"})
@@ -254,6 +304,14 @@ def test_chat_describe_data_sse(fastq, offline):
     assert "Quality encoding" in labels
     assert panel["length_hist"] == {"36": 3} or panel["length_hist"] == {36: 3}
     assert len(panel["qual_by_pos"]) == 36
+
+
+def test_static_assets_are_no_cache():
+    """UI assets carry Cache-Control: no-cache so an open tab never shows a stale app.js."""
+    client = TestClient(create_app())
+    r = client.get("/app.js")
+    assert r.status_code == 200
+    assert "no-cache" in r.headers.get("cache-control", "")
 
 
 def test_chat_stub_for_unwired_intent(offline):

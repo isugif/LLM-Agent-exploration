@@ -47,6 +47,7 @@
         <button class="tab active" data-tab="output" role="tab">Output</button>
         <button class="tab" data-tab="activity" role="tab">Activity<span id="act-badge" class="badge-dot" hidden></span></button>
         <button class="tab" data-tab="terminal" role="tab">Terminal</button>
+        <button class="tab" data-tab="report" role="tab">Report</button>
         <select id="turn-select" class="turn-select" title="⌘↑/⌘↓ questions · ⌘←/⌘→ tabs"></select>
       </div>
       <div id="progress" class="progress" hidden><div id="progress-fill" class="progress-fill"></div></div>
@@ -64,6 +65,10 @@
         </div>
         <div id="tab-terminal" class="tab-pane" hidden>
           <pre id="terminal" class="terminal"><span class="act-empty">Raw output from each step appears here.</span></pre>
+        </div>
+        <div id="tab-report" class="tab-pane" hidden>
+          <div id="report-empty" class="act-empty">A tool's HTML report (e.g. FastQC) opens here — run a tool, then click “View report”.</div>
+          <iframe id="report-frame" class="report-frame" title="tool report" hidden></iframe>
         </div>
       </div>
     </section>

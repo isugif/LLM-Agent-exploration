@@ -99,6 +99,15 @@ body {
 .tab-pane { min-height: 0; }
 .panel-empty { color: var(--muted); text-align: center; margin-top: 18vh; }
 
+/* report tab — FastQC/MultiQC HTML rendered in an iframe (self-contained, light background) */
+.report-frame { width: 100%; height: calc(100vh - 180px); min-height: 420px; border: 0;
+  border-radius: 8px; background: #fff; }
+.report-ctl { margin-top: 10px; display: flex; gap: 12px; align-items: center; }
+.rpt-btn { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  padding: 4px 12px; font-size: 12px; cursor: pointer; }
+.rpt-btn:hover { filter: brightness(1.08); }
+.rpt-link { font-size: 12px; color: var(--muted); }
+
 /* activity feed */
 .activity { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .act-empty { color: var(--muted); text-align: center; margin-top: 18vh; font-family: inherit; }

@@ -39,7 +39,7 @@ Three-pillar mapping:
 
 The composition makes silent-wrong-answers catchable *for free*:
 
-> A short-read aligner's contract says `operating_range: read_length 20–300` (software trait). The run
+> A short-read aligner's contract carries a `read_length` **precondition** (software trait). The run
 > is measured as Nanopore ~10 kb reads (technology trait). Judgment → **refuse**: "runs but produces
 > garbage." Neither trait alone catches it; their *composition* does.
 

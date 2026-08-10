@@ -36,6 +36,12 @@ _SESSION_RE = re.compile(
     r"|\bwhere\b.{0,40}\b(?:output|outputs|results?|wrote|saved|write)\b"
     r"|\bwhat (?:were|was|are)\b.{0,40}\b(?:results?|verdict|output|summary|metrics?)\b"
     r"|\bresults?\b.{0,20}\bagain\b)", re.IGNORECASE)
+# a reference to a run's output/results — only routed to recall when the session has runs (see resolve)
+_OUTPUT_RE = re.compile(r"\b(?:output|outputs|results?|report|reports|summary|verdict|metrics?)\b", re.IGNORECASE)
+# a question ABOUT the session itself (id/age/size) — routed to recall regardless of run count
+_SESSION_META_RE = re.compile(
+    r"\b(?:what|which)\b.{0,20}\bsession\b|\bsession\s*id\b|\bsession\s*info\b"
+    r"|\bhow many runs\b|\bwhat tools?\b.{0,20}\b(?:used|run|ran)\b", re.IGNORECASE)
 
 # Slots each intent needs before it can act. If unresolved after grounding, the router asks.
 # (run_pipeline's tool defaults to fastqc, so only `file` is required.)
@@ -99,17 +105,40 @@ def session_question(message: str) -> bool:
     return bool(_SESSION_RE.search(message or ""))
 
 
-def resolve(intent, message: str, history: Optional[list[dict]]) -> list[str]:
-    """Mutate `intent` in place: correct classification + fill slots. Returns human-readable notes."""
+def output_question(message: str) -> bool:
+    """Mentions a run's output/results — routed to recall only when the session actually has runs."""
+    return bool(_OUTPUT_RE.search(message or ""))
+
+
+def session_meta_question(message: str) -> bool:
+    """Asks about the session itself (id/age/size/tools) — answerable even with zero runs."""
+    return bool(_SESSION_META_RE.search(message or ""))
+
+
+_SESSION_INTENTS = ("other", "explain_tool", "find_tool", "describe_data", "propose_strategy")
+
+
+def resolve(intent, message: str, history: Optional[list[dict]],
+            session: Optional[dict] = None) -> list[str]:
+    """Mutate `intent` in place: correct classification + fill slots. Returns human-readable notes.
+
+    `session` (optional) is a small context dict {"has_runs": bool, "tools": [...]} the router builds
+    from the on-disk run-log; it lets a question about "the fastqc output" resolve to recall instead
+    of demanding a file.
+    """
     notes: list[str] = []
     named = tool_in(message)
     fq = fastq_in(message)
+    has_runs = bool(session and session.get("has_runs"))
 
-    # 0a) session_query: a first-person recall question about past runs ("where did I write the
-    #     fastqc output", "what were the results"). Checked BEFORE find_tool so "which tool did I
-    #     run?" is recall, not discovery. Gated on no file (a file present means describe/run).
-    if not fq and session_question(message) and \
-            intent.intent in ("other", "explain_tool", "find_tool", "describe_data", "propose_strategy"):
+    # 0a) session_query: a recall question about past runs. Either explicit first-person phrasing
+    #     ("where did I write the fastqc output", "what were the results"), OR — when this session has
+    #     runs — a reference to a run's output/results ("what can you tell me about the fastqc
+    #     output?"). Checked BEFORE find_tool so "which tool did I run?" is recall, not discovery.
+    #     Gated on no file (a file present means describe/run).
+    if not fq and intent.intent in _SESSION_INTENTS and \
+            (session_question(message) or session_meta_question(message)
+             or (has_runs and output_question(message))):
         intent.intent = "session_query"
         notes.append("intent=session_query (recall about this session's runs)")
 

@@ -1,21 +1,23 @@
 # LLM-Agent-exploration
 
-> **Resuming?** Start with [`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md) — env, resume commands,
-> what's built, and prioritized next steps.
-
-
-Building an **agentic bioinformatician** two ways — with [LangGraph](https://langchain-ai.github.io/langgraph/)
-and with [NVIDIA Object-Oriented Agents (NOOA)](https://github.com/NVIDIA-NeMo/labs-OO-Agents) — on
-the *same* architecture, so the frameworks can be compared honestly.
-
-* [NOOA GitHub](https://github.com/NVIDIA-NeMo/labs-OO-Agents) · [NOOA paper](https://arxiv.org/html/2607.20709v1)
-
-## The premise
-
-Bioinformatics fails **silently**: a pipeline exits 0 and returns wrong biology because an
+Bioinformatics fails **silently**: a pipeline exits zero but returns wrong biology because an
 assumption was violated in the organism, the sequencing technology, or the software. We make those
-assumptions explicit as machine-readable **contracts**, and place **four harnesses** (checkpoints)
-around every run:
+assumptions explicit — every data type, database, tool, and workflow carries a **contract** stating
+its preconditions, operating range, and must-not-use boundaries — then place **four checkpoints**
+around the run. Onboarding turns the scientist's question into a structured spec, reconciling
+declared facts against measured ones. Judgment routes it to a workflow whose contracts don't
+conflict. Diagnosis explains crashes; results evaluation flags output outside expected ranges. Novel
+cases escalate to human curation and return as versioned contracts, so the system's judgment
+compounds.
+
+We build this **agentic bioinformatician two ways** — with
+[LangGraph](https://langchain-ai.github.io/langgraph/) and with
+[NVIDIA Object-Oriented Agents (NOOA)](https://github.com/NVIDIA-NeMo/labs-OO-Agents) — on the
+*same* architecture, so the frameworks can be compared honestly.
+([NOOA GitHub](https://github.com/NVIDIA-NeMo/labs-OO-Agents) ·
+[NOOA paper](https://arxiv.org/html/2607.20709v1))
+
+## The four harnesses
 
 1. **Onboarding** — turn the scientist's question into a spec, reconciling *declared* facts against
    *measured* facts probed from the files.
@@ -25,7 +27,8 @@ around every run:
 4. **Evaluation** — on success, score output against expected ranges and flag anomalies.
 
 Full design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Framework comparison:
-[`docs/COMPARISON.md`](docs/COMPARISON.md).
+[`docs/COMPARISON.md`](docs/COMPARISON.md). Every case × both tracks is benchmarked in
+[`tests/REPORT.md`](tests/REPORT.md).
 
 Milestone 1 implements this end-to-end on **FastQC** (small + fast for iteration).
 
@@ -33,30 +36,36 @@ Milestone 1 implements this end-to-end on **FastQC** (small + fast for iteration
 
 ```
 bio-tools/         ONE folder per tool = its single source of truth
-  fastqc/          workbook ymls (install/hpc/usage/...) + contract.yml (the enforceable contract)
+  fastqc/          manifest.yml + clean/<section>.yml (machine sections assembled into the contract)
   multiqc/         same layout — second tool, added with no harness changes
 shared/            framework-agnostic knowledge + execution (BOTH tracks import this)
-  contracts/       schema/ + expectations/ (assay-keyed expected-range tables)
+  sections/schemas.py  pydantic schemas for every clean section (the validation gate)
+  contracts_lib.py assemble contract from manifest, safe precondition eval, metric scoring
+  contracts/expectations/  assay-keyed expected-range tables (referenced by expectations_ref)
   probes/          measured-facts probes (FASTQ; report-dir for aggregators)
   execution/       generic contract-driven runner (+ audit record)
-  qc/              per-tool output parsers (fastqc, multiqc)
+  parsers/         per-tool output parsers (fastqc, multiqc)
+  harness_steps.py the four harnesses' step logic, shared by both tracks
+  catalog.py + knowledge/  the tool catalog + purpose taxonomy (powers find_tool)
   tools/registry.py  tool_id -> parser + input probe
-  contracts_lib.py load/validate contracts, safe precondition eval, metric scoring
-  llm/             pluggable Ollama provider (LangGraph track)
+  llm/             pluggable Ollama/Claude provider (LangGraph track)
   data/            fetch_virus_fastq.sh — small SARS-CoV-2 test dataset
 langgraph_impl/    LangGraph track: StateGraph + node functions   (+ CHANGELOG.md)
 nooa_impl/         NOOA track: Agent classes + plain orchestrator  (+ CHANGELOG.md)
+curator/           LLM-driven curator: installs a tool + writes its clean sections (see docs/CURATOR.md)
+app/               chat web app (FastAPI + JS UI) over the shared core
 tests/             fixtures per failure mode + run_tests.py -> REPORT.md
 docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md, TRAITS.md, PRINCIPLES.md
 shared/traits/     reusable constraints/knowledge (three pillars): runtime/ biology/ domain/
 ```
 
-The **section-yml-curator** agent (an LLM-driven tool that writes the clean YAML) lives in `temp/`
-(not yet in the repo); its verified properties, token costs, and findings are logged in
+The **curator** (`curator/`) is an LLM-driven tool that provisions a tool and writes its clean YAML
+sections; its verified properties, token costs, and findings are logged in
 [`docs/CURATOR.md`](docs/CURATOR.md) so they don't have to be rediscovered.
 
 Guiding rule: everything tool-specific lives in `bio-tools/<tool>/`; the harnesses are
-tool-agnostic. **Adding a tool = drop `bio-tools/<tool>/contract.yml` + register a parser** (see
+tool-agnostic. **Adding a tool = fill `bio-tools/<tool>/manifest.yml` + `clean/<section>.yml` (the
+curator can auto-write the fact sections) + register a parser** (see
 [`docs/ADD_A_TOOL.md`](docs/ADD_A_TOOL.md)). Adding a QC check = add a metric row to an expectation
 table. No harness/track code changes for either.
 
@@ -117,8 +126,23 @@ python -m app                            # http://127.0.0.1:8000  (--port / --mo
 Ask *"what can you tell me about `shared/data/SRR11140744_10k.fastq.gz`"* → the right panel fills with
 the measured facts (format, read-length min/max/mode, Phred encoding, SE/PE hint), a read-length
 histogram, and per-position quality. Pick **Ollama** or **Claude** in the model dropdown (Claude uses
-your local `claude` login — no API key). v1 wires the **describe_data** flow; other intents
-(propose-strategy, run-pipeline, add-tool) are classified but return a graceful "coming soon" stub.
+your local `claude` login — no API key).
+
+Wired intents:
+
+- **describe_data** — profile a FASTQ (facts + plots).
+- **explain_tool** — answer about a named tool, grounded in its docs + live `--help`.
+- **find_tool** — cross-tool discovery: *"which tool takes fastq?"*, *"what's good for alignment?"*.
+- **run_pipeline** — run a tool through the four harnesses, streaming each stage; the HTML report
+  (FastQC/MultiQC) opens in the **Report** tab (or a new browser tab).
+- **add_tool** — install + document a new tool via the curator (HRR-gated: documented but not
+  runnable until a human reviews the safety contract).
+- **session_query** — recall this session's past runs: *"where did I write the fastqc output?"*,
+  *"what were the results?"*. Runs persist to a disk-backed log (`~/.bio_chat/sessions/`), and the
+  **session picker** reloads a past session to continue or review it.
+
+The LLM only classifies and narrates; deterministic code produces every fact, so the app degrades
+gracefully with the model off.
 
 ## Tests
 
@@ -135,3 +159,8 @@ precondition-block / anomaly / diagnosis / MultiQC). Fixtures are in `tests/inpu
 Each track keeps its own changelog so the divergence in orchestration effort is visible over time:
 [`langgraph_impl/CHANGELOG.md`](langgraph_impl/CHANGELOG.md) ·
 [`nooa_impl/CHANGELOG.md`](nooa_impl/CHANGELOG.md).
+
+---
+
+_Resuming work on this repo? [`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md) has env setup,
+resume commands, and prioritized next steps._

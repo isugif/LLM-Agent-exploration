@@ -45,6 +45,23 @@ def test_run_dir_is_inside_session_and_sanitized(store):
     assert "/" not in d.name.replace("-", "") or d.parent.name == "runs"  # slug has no path parts
 
 
+def test_run_dir_name_is_url_safe(store):
+    """The run-dir name feeds a report URL query param — no '+' (would decode to a space) or ':'."""
+    sid = store.ensure(None)
+    name = store.run_dir(sid, "fastqc").name
+    assert "+" not in name and ":" not in name
+    assert store.report_file(sid, name) is None      # no html yet, but the name resolves safely
+
+
+def test_report_file_serves_and_rejects_traversal(store):
+    sid = store.ensure(None)
+    run = store.run_dir(sid, "fastqc")
+    (run / "SRR_fastqc.html").write_text("<html>ok</html>")
+    assert store.report_file(sid, run.name).name == "SRR_fastqc.html"
+    assert store.report_file(sid, "../../etc") is None
+    assert store.report_file("../x", run.name) is None
+
+
 def test_append_and_load_runs_roundtrip(store):
     sid = store.ensure(None)
     store.append_run(sid, {"tool": "fastqc", "question": "qc", "out_dir": "/x",

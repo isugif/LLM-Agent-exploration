@@ -39,8 +39,10 @@ Two design commitments make this more than four LLM vibe checks:
 
 A tool is **data + two small functions**, no harness changes:
 
-- **Data:** `bio-tools/<tool>/contract.yml` — the enforceable contract, living in the same folder as
-  the tool's human-facing workbook ymls (single source of truth per tool).
+- **Data:** `bio-tools/<tool>/manifest.yml` + `clean/<section>.yml`. The `machine: true` sections
+  (meta, execution, preconditions, must_not_use, failure_modes) are **assembled** into the runtime
+  contract at load time by `shared/contracts_lib.py:load_contract`; context sections (install, usage,
+  …) load on demand. One folder per tool is its single source of truth.
 - **Code:** a parser (`shared/parsers/<tool>_parse.py`) and — only for a new input type — a probe
   (`shared/probes/<type>_probe.py`), both registered in `shared/tools/registry.py`.
 
@@ -51,9 +53,10 @@ MultiQC is wired in as a second tool this way.
 
 ## The contract, on FastQC
 
-FastQC is small and fast, so the whole loop runs in seconds. Its contract lives at
-`bio-tools/fastqc/contract.yml` and deliberately fills the gaps a documentation-style description
-leaves open:
+FastQC is small and fast, so the whole loop runs in seconds. Its contract is **assembled** from the
+`machine: true` sections listed in `bio-tools/fastqc/manifest.yml`
+(`clean/{meta,execution,preconditions,must_not_use,failure_modes}.yml`) and deliberately fills the
+gaps a documentation-style description leaves open:
 
 - **preconditions** — assertable expressions (`measured.n_reads_sampled > 0`) evaluated by a
   restricted expression evaluator (no `eval`), see `shared/contracts_lib.py`.
@@ -76,13 +79,16 @@ onboarding (probe + declare + reconcile)
 ## Two implementations, one architecture
 
 The four harnesses are implemented twice, sharing 100% of the knowledge/execution layer
-(`shared/`). Only the *orchestration* differs — that is what the project compares.
+(`shared/`). Only the *orchestration* differs — that is what the project compares. The per-harness
+step logic (reconcile, build route, diagnose, score) lives once in `shared/harness_steps.py`; each
+track's node functions / agent methods are thin wrappers over it, so behavioural parity is
+structural rather than policed.
 
 | Harness | LangGraph (`langgraph_impl/`) | NOOA (`nooa_impl/`) |
 |---|---|---|
 | Onboarding | `harnesses/onboarding.py` node fn | `agents/onboarding.py` `OnboardingAgent` |
 | Judgment | `harnesses/judgment.py` node fn | `agents/judgment.py` `JudgmentAgent` |
-| Execution | `harnesses/execution.py` node fn | `run_fastqc` called in `orchestrator.py` |
+| Execution | `harnesses/execution.py` node fn | `run_tool` (generic runner) in `orchestrator.py` |
 | Diagnosis | `harnesses/diagnosis.py` node fn | `agents/diagnosis.py` `DiagnosisAgent` |
 | Evaluation | `harnesses/evaluation.py` node fn | `agents/evaluation.py` `EvaluationAgent` |
 | Routing | conditional edges in `graph.py` | plain `if` in `orchestrator.py` |
@@ -99,6 +105,22 @@ confirming whether a keyword-matched boundary is a real violation, and explainin
 plain language. Everything load-bearing — preconditions, crash matching, metric tiers — is
 **deterministic**. So the pipeline still runs, and still catches real problems, with the LLM
 switched off. The LLM sharpens judgment; it is never the thing that decides pass/fail.
+
+## The chat app (`app/`)
+
+A split-screen web app (FastAPI + a vanilla-JS UI) is the interactive front end over the same
+shared core. Free-text messages are classified into a typed **Intent** and dispatched by
+deterministic code — the LLM routes and narrates, it never produces the facts. Wired capabilities:
+
+- **describe_data** — probe a FASTQ and show measured facts + read-length / quality plots.
+- **explain_tool** — answer about one documented tool, grounded in its `clean/` sections + live `--help`.
+- **find_tool** — cross-tool discovery ("which tool takes fastq / is good for alignment") over a
+  catalog built from every tool's manifest (`shared/catalog.py`, `shared/knowledge/categories.py`).
+- **run_pipeline** — run a tool through the four harnesses, streaming each stage.
+- **add_tool** — install + document a new tool via the curator (HRR-gated; not runnable until reviewed).
+- **session_query** — recall this session's past runs (where the output went, what the verdict was),
+  backed by a disk-persisted run-log (`app/session.py`, under `~/.bio_chat/sessions/`). A run's HTML
+  report (FastQC/MultiQC) renders in an in-app **Report** tab.
 
 ## Not yet built (future milestones)
 

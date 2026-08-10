@@ -2,8 +2,12 @@
 
 A tool is **data + two small functions**. You do not touch the harnesses or either track.
 
-- **Data** — one `bio-tools/<tool>/contract.yml` (the enforceable contract). This lives in the same
-  folder as the tool's human-facing workbook ymls, so there is one place per tool.
+- **Data** — a `bio-tools/<tool>/manifest.yml` plus `clean/<section>.yml` files. There is **no**
+  single `contract.yml`: the runtime contract is *assembled* at load time by
+  `shared/contracts_lib.py:load_contract` from the sections the manifest marks `machine: true`
+  (`meta`, `execution`, `preconditions`, `must_not_use`, `failure_modes`). Context sections
+  (`install`, `usage`, `input`, …) load situationally. One folder per tool is its single source of
+  truth. Each section validates against a **pydantic** schema in `shared/sections/schemas.py`.
 - **Code** — a **parser** (turn the tool's output into a metric dict) and, only if the tool takes a
   new *input type*, a **probe** (measure facts about that input). Both are registered in
   `shared/tools/registry.py`.
@@ -28,17 +32,22 @@ with `--binary`. Output lands in `bio-tools/<tool>/` (`manifest.yml`, `clean/*.y
 
 ## Checklist
 
-1. **`bio-tools/<tool>/contract.yml`** — fill every section (validated against
-   `shared/contracts/schema/contract.schema.json`):
-   - `execution.argv` — how to run it, as a **token list** (`[tool, -o, "{out_dir}", "{input}"]`).
+1. **`bio-tools/<tool>/manifest.yml` + the machine sections under `clean/`** — each validates
+   against its pydantic schema in `shared/sections/schemas.py`:
+   - `clean/meta.yml` — `summary` (used by the judgment prompt), `expectations_ref` (an assay table
+     under `shared/contracts/expectations/`), and `category_tags` (purpose labels from
+     `shared/knowledge/categories.py`, which power `find_tool`).
+   - `clean/execution.yml` — `argv` as a **token list** (`[tool, -o, "{out_dir}", "{input}"]`).
      Placeholders `{input}`, `{out_dir}`, `{threads}` are substituted per-token; never a shell
      string, so there is no injection surface. Add `version_argv` and `install_hint`.
-   - `preconditions` — assertable expressions over `measured.*` / `declared.*` facts, each `block`
-     or `warn`.
-   - `must_not_use` — off-label boundaries with `keywords` (cheap pre-filter; the LLM confirms).
-   - `failure_modes` — a grep-able `signal` per known crash + its `fix`.
-   - `operating_range`, `gotchas`, and `expectations_ref` (an assay table under
-     `shared/contracts/expectations/`).
+   - `clean/preconditions.yml` — assertable expressions over `measured.*` / `declared.*` facts, each
+     `block` or `warn`.
+   - `clean/must_not_use.yml` — off-label boundaries with `keywords` (cheap pre-filter; the LLM confirms).
+   - `clean/failure_modes.yml` — a grep-able `signal` per known crash + its `fix`.
+   - `manifest.yml` lists every section (`name`, `path`, `machine`, `load_when`) and any `runtimes:`
+     traits to compose (e.g. `[java]` inherits the OOM→`-Xmx` failure mode). The `machine: true`
+     sections are what `load_contract` assembles; until their `HRR_` placeholders are replaced, the
+     judgment harness **refuses to route the tool**.
 
 2. **Parser** in `shared/parsers/<tool>_parse.py` — `parse(output_dir) -> {metric: value}`. Emit the
    metric names your `expectations_ref` table scores (metrics not in the table are ignored; missing
@@ -61,9 +70,9 @@ with `--binary`. Output lands in `bio-tools/<tool>/` (`manifest.yml`, `clean/*.y
 
 MultiQC aggregates a *directory* of other tools' reports, so it needed the new-input-type path:
 
-- `bio-tools/multiqc/contract.yml` — `execution.argv: [multiqc, "{input}", -o, "{out_dir}", -f]`;
-  preconditions assert `measured.format == 'report_dir'` and `measured.n_reports > 0`; boundaries say
-  it is not a measurement tool and not a decision-maker.
+- `bio-tools/multiqc/manifest.yml` + `clean/` — `execution.argv: [multiqc, "{input}", -o, "{out_dir}", -f]`;
+  `preconditions` assert `measured.format == 'report_dir'` and `measured.n_reports > 0`; `must_not_use`
+  says it is not a measurement tool and not a decision-maker.
 - `shared/parsers/multiqc_parse.py:parse_multiqc` — reads `multiqc_data/multiqc_general_stats.txt`,
   averages metrics across samples, renames to the shared assay-table metric names.
 - `shared/probes/report_dir_probe.py:probe_report_dir` — counts recognized reports in the directory.

@@ -288,8 +288,11 @@ function toolPanelHTML(p) {
 }
 
 function sessionPanelHTML(p) {
+  const idline = [p.sid ? `session ${esc(p.sid.slice(0, 8))}…` : "this analysis session",
+    p.created ? `started ${esc(p.created)}` : "",
+    (p.tools && p.tools.length) ? `tools: ${esc(p.tools.join(", "))}` : ""].filter(Boolean).join(" · ");
   let h = `<div><h2>Session runs${p.count != null ? ` (${p.count})` : ""}</h2>
-    <div class="file-name">this analysis session</div></div>`;
+    <div class="file-name">${idline}</div></div>`;
   if (!p.runs || !p.runs.length) {
     return h + cardHTML("No runs yet", `<span class="muted">Run a tool and it will be recorded here.</span>`);
   }
@@ -297,7 +300,8 @@ function sessionPanelHTML(p) {
     const v = r.verdict || r.action || "?";
     const cls = v === "ok" ? "badge-ok" : (v === "refuse" || v === "failure") ? "badge-bad" : "badge-warn";
     const body = `<span class="badge ${cls}">${esc(v)}</span>` +
-      kvTable({ when: r.when, output: r.out_dir, question: r.question });
+      kvTable({ when: r.when, output: r.out_dir, question: r.question }) +
+      reportControls(r.out_name);
     h += cardHTML(esc(r.tool || "run"), body);
   }
   return h;
@@ -337,6 +341,7 @@ function stageCardHTML(ev) {
     const cls = ev.ok ? "badge-ok" : "badge-bad";
     body = `<span class="badge ${cls}">exit ${fmt(ev.exit_code)}</span>` +
       (ev.out_dir ? `<div class="file-name">${esc(ev.out_dir)}</div>` : "") +
+      (ev.ok ? reportControls(ev.out_name) : "") +
       (ev.error ? `<p class="warn">${esc(ev.error)}</p>` : "") +
       (ev.stderr_tail ? `<pre class="tail">${esc(ev.stderr_tail)}</pre>` : "");
   } else if (ev.stage === "evaluation") {
@@ -451,15 +456,32 @@ function runsToPanel(runs) {
   };
 }
 
+// wipe the whole workspace back to a blank slate — used when switching to another session so no
+// old chat/tab/report content leaks across sessions.
+function resetWorkspace() {
+  turns = []; view = -1; stream = -1;
+  convo = [];
+  $("turn-select").innerHTML = "";
+  log.innerHTML = "";
+  panel.innerHTML = ""; panel.hidden = true; panelEmpty.hidden = false;
+  $("activity").innerHTML = '<div class="act-empty">Activity — what the agent is thinking and doing — appears here.</div>';
+  $("terminal").innerHTML = '<span class="act-empty">Raw output from each step appears here.</span>';
+  const rf = $("report-frame"); rf.src = "about:blank"; rf.hidden = true;
+  const re = $("report-empty"); if (re) re.hidden = false;
+  $("act-badge").hidden = true;
+  switchTab("output");
+}
+
 async function switchSession(target) {
   if (target === "__new__") {
     sid = newSid(); localStorage.setItem("bioSid", sid);
-    convo = []; addMsg("Started a new session.", "assistant");
+    resetWorkspace();
+    addMsg("Started a new session.", "assistant");
     await populateSessions();
     return;
   }
   sid = target; localStorage.setItem("bioSid", sid);
-  convo = [];
+  resetWorkspace();
   addMsg(`Loaded session ${sid.slice(0, 8)}…`, "assistant");
   try {
     const runs = (await (await fetch(`/api/sessions/${sid}/runs`)).json()).runs || [];
@@ -481,12 +503,33 @@ function switchTab(name) {
   $("tab-output").hidden = name !== "output";
   $("tab-activity").hidden = name !== "activity";
   $("tab-terminal").hidden = name !== "terminal";
+  $("tab-report").hidden = name !== "report";
   if (name === "activity") $("act-badge").hidden = true;
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
-// ---- navigation: ⌘↑/⌘↓ = question history, ⌘←/⌘→ = Output/Activity/Terminal tabs ----
-const TAB_ORDER = ["output", "activity", "terminal"];
+// ---- reports: view a run's HTML output in the Report tab (or open it in a new browser tab) ----
+function reportUrl(outName) {
+  return `/api/sessions/${encodeURIComponent(sid)}/report?run=${encodeURIComponent(outName)}`;
+}
+function reportControls(outName) {
+  if (!outName) return "";
+  return `<div class="report-ctl"><button class="rpt-btn" data-run="${esc(outName)}">View report</button>` +
+    ` <a class="rpt-link" href="${reportUrl(outName)}" target="_blank" rel="noopener">open in new tab ↗</a></div>`;
+}
+function viewReport(outName) {
+  const f = $("report-frame"), e = $("report-empty");
+  f.src = reportUrl(outName); f.hidden = false; if (e) e.hidden = true;
+  switchTab("report");
+}
+// delegated: report buttons live inside dynamically-rebuilt panel HTML
+$("panel").addEventListener("click", (ev) => {
+  const b = ev.target.closest(".rpt-btn");
+  if (b && b.dataset.run) viewReport(b.dataset.run);
+});
+
+// ---- navigation: ⌘↑/⌘↓ = question history, ⌘←/⌘→ = Output/Activity/Terminal/Report tabs ----
+const TAB_ORDER = ["output", "activity", "terminal", "report"];
 function cycleTab(dir) {
   const i = Math.max(0, Math.min(TAB_ORDER.length - 1, TAB_ORDER.indexOf(currentTab) + dir));
   switchTab(TAB_ORDER[i]);

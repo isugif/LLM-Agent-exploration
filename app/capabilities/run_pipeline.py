@@ -10,6 +10,7 @@ later refinement.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Iterator, Optional
 
 from langgraph_impl.graph import build_graph
@@ -52,9 +53,10 @@ def to_event(stage: str, delta: dict) -> dict:
                 "boundary_hits": r.get("boundary_hits", [])}
     if stage == "execute":
         rr = delta.get("run_result", {})
+        out_dir = rr.get("output_dir") or ""
         return {"stage": "execution", "title": "Execution",
                 "ok": rr.get("ok"), "exit_code": rr.get("exit_code"),
-                "out_dir": rr.get("output_dir"),
+                "out_dir": out_dir, "out_name": Path(out_dir).name if out_dir else None,
                 "stderr_tail": (rr.get("stderr") or "")[-_TAIL:],
                 "error": rr.get("error")}
     if stage == "evaluation":

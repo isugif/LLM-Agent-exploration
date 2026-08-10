@@ -79,7 +79,7 @@ provider is more boilerplate but you can read every byte that goes to the model.
 Because both share `shared/`, the ergonomics of *extending the knowledge* are identical and live
 outside either framework:
 
-- **Add a tool:** drop `shared/contracts/tools/<tool>.yaml` (+ a runner). No agent/graph change.
+- **Add a tool:** fill `bio-tools/<tool>/manifest.yml` + `clean/<section>.yml` (+ a parser). No agent/graph change.
 - **Add a QC check:** add a metric row to `shared/contracts/expectations/*.yaml`. No code change.
 - **Add a harness step:** LangGraph = new node + edge; NOOA = new method + a line in the orchestrator.
 
@@ -102,8 +102,8 @@ case is exercised only with `--llm`.
 
 ## 7. Adding a tool — identical for both tracks
 
-Because the tool library is shared data, adding MultiQC (contract.yml + parser + report-dir probe)
-required **zero changes to either track**. The de-hardcoding (thread `tool_id`, derive scored metrics
+Because the tool library is shared data, adding MultiQC (manifest + clean sections + parser +
+report-dir probe) required **zero changes to either track**. The de-hardcoding (thread `tool_id`, derive scored metrics
 from the contract, generic argv runner) is what made both orchestrations tool-agnostic at once.
 
 ## 8. Verdict at this size + where the edges are (2026-08-07)

@@ -61,9 +61,10 @@ Loose ends left after moving the contract to clean per-section ymls (harness cut
 - **On-demand `install.yml` in diagnosis.** Diagnosis still reads `execution.install_hint`; wire it
   to open the `install` section via the manifest (`section_path`/`load_section`) on an install error,
   and drop the `install_hint` duplication. (Was the original M3.4 intent.)
-- **Refresh the docs.** `docs/ADD_A_TOOL.md` and `docs/ARCHITECTURE.md` still say "drop a
-  `contract.yml`"; update them to the manifest + `clean/<section>.yml` model (add-a-tool = fill the
-  clean sections + manifest; the curator will automate this).
+- **Refresh the docs.** ✅ Done — README (now leads with the premise), `docs/ADD_A_TOOL.md`,
+  `docs/ARCHITECTURE.md`, `docs/COMPARISON.md`, `docs/TRAITS.md` updated to the manifest +
+  `clean/<section>.yml` assembly model (no more `contract.yml`); the chat app + its capabilities are
+  documented.
 - **Remove the dead JSON schema.** `shared/contracts/schema/contract.schema.json` is no longer used
   (validation moved to pydantic in `shared/sections/schemas.py`); delete or repurpose it.
 - **Regenerate the prose workbook ymls from the clean source.** The 22 render-template ymls are

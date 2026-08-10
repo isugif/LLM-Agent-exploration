@@ -13,9 +13,10 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from pathlib import Path
 
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -73,7 +74,9 @@ def make_chat_router() -> APIRouter:
             intent = await run_in_threadpool(classify, req.message, provider, req.history)
             if req.file and not intent.files:            # explicit UI file field
                 intent.files = [req.file]
-            notes = resolve.resolve(intent, req.message, req.history)   # deterministic grounding
+            runs = STORE.load_runs(sid)
+            session_ctx = {"has_runs": bool(runs), "tools": sorted({r.get("tool") for r in runs if r.get("tool")})}
+            notes = resolve.resolve(intent, req.message, req.history, session_ctx)   # deterministic grounding
             yield _sse("meta", json.dumps({"provider": provider.name, "intent": intent.intent, "sid": sid}))
             for n in notes:
                 yield _sse("log", json.dumps({"text": f"grounded: {n}"}))
@@ -118,9 +121,9 @@ def make_chat_router() -> APIRouter:
                         findings = ev.get("findings", []) or findings
                     yield _sse("stage", json.dumps(ev))
                 STORE.append_run(sid, {"tool": tool, "question": req.message, "file": file,
-                                       "out_dir": out_dir, "action": action,
-                                       "verdict_status": verdict_status, "metrics": metrics,
-                                       "findings": findings})
+                                       "out_dir": out_dir, "out_name": Path(out_dir).name,
+                                       "action": action, "verdict_status": verdict_status,
+                                       "metrics": metrics, "findings": findings})
                 yield _sse("prose", json.dumps(
                     {"text": run_pipeline.summary_line(action, verdict_status, tool)}))
 
@@ -186,5 +189,13 @@ def make_chat_router() -> APIRouter:
     def session_runs(sid: str) -> dict:
         """The run history of one session (for reloading it into the panel)."""
         return {"sid": sid, "runs": STORE.load_runs(sid)}
+
+    @router.get("/api/sessions/{sid}/report")
+    def session_report(sid: str, run: str):
+        """Serve the HTML report of one run (for the in-app Report tab / open-in-new-tab)."""
+        path = STORE.report_file(sid, run)
+        if path is None:
+            raise HTTPException(status_code=404, detail="no report for that run")
+        return FileResponse(str(path), media_type="text/html")
 
     return router

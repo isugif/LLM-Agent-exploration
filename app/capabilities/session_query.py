@@ -20,6 +20,11 @@ from app.resolve import tool_in
 _WHERE_RE = re.compile(r"\b(where|which dir|directory|folder|path|out_?dir|output|wrote|saved|write)\b", re.I)
 _RESULT_RE = re.compile(r"\b(result|results|verdict|summary|metric|metrics|score|finding|findings|outcome)\b", re.I)
 _LIST_RE = re.compile(r"\b(what have i|what did i|which|list|history|all|everything|so far|runs?)\b", re.I)
+# a question ABOUT the session itself (id, age, size) rather than a specific run's output
+_META_RE = re.compile(
+    r"\b(?:what|which)\b.{0,20}\bsession\b|\bsession\s*id\b|\bsession\s*info\b"
+    r"|\bwhat session is this\b|\bhow many runs\b|\bwhen did (?:i|this).{0,20}\b(?:start|begin)\b"
+    r"|\bwhat tools?\b.{0,20}\b(?:used|run|ran)\b", re.I)
 
 NARRATE_SYSTEM = (
     "You answer from a bioinformatics session's run-log ONLY. Use just the records provided below; "
@@ -32,9 +37,12 @@ def _when(rec: dict) -> str:
     return (rec.get("ts") or "").replace("T", " ").replace("+00:00", " UTC")
 
 
-def _panel(runs: list[dict]) -> dict:
+def _panel(runs: list[dict], sid: Optional[str] = None, created: Optional[str] = None) -> dict:
     return {
         "kind": "session",
+        "sid": sid,
+        "created": (created or "").replace("T", " ").replace("+00:00", " UTC") or None,
+        "tools": sorted({r.get("tool") for r in runs if r.get("tool")}),
         "count": len(runs),
         "runs": [{
             "tool": r.get("tool"),
@@ -42,6 +50,7 @@ def _panel(runs: list[dict]) -> dict:
             "action": r.get("action"),
             "verdict": r.get("verdict_status"),
             "out_dir": r.get("out_dir"),
+            "out_name": r.get("out_name"),   # run-dir basename -> report link
             "question": r.get("question"),
         } for r in reversed(runs)],   # newest first for display
     }
@@ -76,16 +85,43 @@ def _result_answer(rec: dict) -> str:
     return " ".join(parts)
 
 
+def _summary(sid: str, runs: list[dict]) -> dict:
+    """Generalized 'about this session' answer: id, age, size, tools, where outputs live. Works even
+    for a brand-new session with no runs — the facet for 'what session is this / how many runs / what
+    tools have I used'."""
+    meta = STORE.session_meta(sid)
+    created = (meta.get("created") or "").replace("T", " ").replace("+00:00", " UTC")
+    panel = _panel(runs, sid=sid, created=meta.get("created"))
+    short = sid[:8]
+    if not runs:
+        prose = (f"You're in session `{short}…` (id `{sid}`)"
+                 + (f", started {created}" if created else "")
+                 + ". No runs yet — try \"run fastqc on <your.fastq>\".")
+        return {"panel": panel, "prose": prose}
+    tools = sorted({r.get("tool") for r in runs if r.get("tool")})
+    n = len(runs)
+    prose = (f"You're in session `{short}…` (id `{sid}`)"
+             + (f", started {created}" if created else "")
+             + f". {n} run{'s' if n != 1 else ''} across {', '.join(f'**{t}**' for t in tools)}. "
+             f"Outputs are under `~/.bio_chat/sessions/{sid}/runs/`.")
+    return {"panel": panel, "prose": prose}
+
+
 def run(message: str, sid: str, provider) -> dict:
     """Answer a recall question about the current session's runs."""
     runs = STORE.load_runs(sid)
+
+    # 'about this session' meta questions answer even for an empty session (id/age/size/tools).
+    if _META_RE.search(message):
+        return _summary(sid, runs)
+
     if not runs:
         return {"panel": None,
                 "prose": "You haven't run anything in this session yet. Try "
                          "\"run fastqc on <your.fastq>\"."}
 
     tool = tool_in(message)                    # a named tool narrows the lookup
-    panel = _panel(runs)
+    panel = _panel(runs, sid=sid, created=STORE.session_meta(sid).get("created"))
 
     # facet routing (deterministic). where/output -> path; result/verdict -> verdict+metrics.
     if _WHERE_RE.search(message) and not _RESULT_RE.search(message):
