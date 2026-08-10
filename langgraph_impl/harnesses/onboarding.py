@@ -24,7 +24,8 @@ class DeclaredFacts(BaseModel):
 
 def onboarding_node(state: dict) -> dict:
     measured = get_probe(state["tool"])(state["fastq"])
-    measured["has_reference"] = bool(state.get("reference"))   # for the aligner reference-required gate
+    measured["has_reference"] = bool(state.get("reference"))    # aligner reference-required gate
+    measured["has_annotation"] = bool(state.get("annotation"))  # rustqc gtf-required gate
     provider = get_provider(state.get("provider"))
 
     declared: dict = {}

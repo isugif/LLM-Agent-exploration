@@ -55,7 +55,7 @@ nooa_impl/         NOOA track: Agent classes + plain orchestrator  (+ CHANGELOG.
 curator/           LLM-driven curator: installs a tool + writes its clean sections (see docs/CURATOR.md)
 app/               chat web app (FastAPI + JS UI) over the shared core
 tests/             fixtures per failure mode + run_tests.py -> REPORT.md
-docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md, TRAITS.md, PRINCIPLES.md
+docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md, TRAITS.md, PRINCIPLES.md, GLOSSARY.md
 shared/traits/     reusable constraints/knowledge (three pillars): runtime/ biology/ domain/
 ```
 
@@ -120,8 +120,22 @@ dispatches — the model routes and narrates, it never produces the facts.
 
 ```bash
 pip install -r requirements.txt          # adds fastapi + uvicorn
-python -m app                            # http://127.0.0.1:8000  (--port / --model to override)
+python -m app                            # http://127.0.0.1:8000  (--port / --model / --workdir)
 ```
+
+**Open the app in your data folder.** Data paths resolve against a **working directory** that
+defaults to where you launched the app (a bare filename or relative path is looked up there, with
+`shared/data/` as a fallback for the demo files). The `bin/abi` launcher opens the app "in" whatever
+folder you're standing in — put `bin/` on your `PATH` or symlink it:
+
+```bash
+ln -s "$(pwd)/bin/abi" ~/.local/bin/abi   # once
+cd /path/to/my/run && abi                 # opens the app with that folder as the working directory
+```
+
+From chat you can inspect or change it: *"what's in my folder?"* lists the data files grouped by
+type; *"my data is in /path/to/run"* (or *"set my working directory to …"*) switches it. The active
+folder shows in the header and is available at `GET/POST /api/workdir`.
 
 Ask *"what can you tell me about `shared/data/SRR11140744_10k.fastq.gz`"* → the right panel fills with
 the measured facts (format, read-length min/max/mode, Phred encoding, SE/PE hint), a read-length
@@ -140,6 +154,8 @@ Wired intents:
 - **session_query** — recall this session's past runs: *"where did I write the fastqc output?"*,
   *"what were the results?"*. Runs persist to a disk-backed log (`~/.bio_chat/sessions/`), and the
   **session picker** reloads a past session to continue or review it.
+- **describe_workdir / set_workdir** — inspect the current working folder (*"what's in my folder?"*)
+  or point it at your data (*"my data is in /path/to/run"*); see the launcher note above.
 
 The LLM only classifies and narrates; deterministic code produces every fact, so the app degrades
 gracefully with the model off.

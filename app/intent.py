@@ -14,7 +14,8 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 IntentName = Literal["describe_data", "explain_tool", "find_tool", "session_query",
-                     "propose_strategy", "run_pipeline", "add_tool", "other"]
+                     "propose_strategy", "run_pipeline", "add_tool",
+                     "describe_workdir", "set_workdir", "other"]
 
 _SYSTEM = (
     "You classify a scientist's bioinformatics request into one intent and extract only what is "
@@ -29,7 +30,11 @@ _SYSTEM = (
     "results'), "
     "propose_strategy (what analysis could I do), "
     "run_pipeline (actually run a tool on a file), "
-    "add_tool (install/add a tool), other."
+    "add_tool (install/add a tool), "
+    "describe_workdir (list/inspect the current working folder — 'what's in my folder', 'what data "
+    "do I have'), "
+    "set_workdir (change the working folder — 'set my working directory to X', 'my data is in X'), "
+    "other."
 )
 
 

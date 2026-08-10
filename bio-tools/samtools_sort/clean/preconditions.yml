@@ -1,0 +1,5 @@
+# CLEAN machine section (list). Validates against schemas.py:Precondition. HUMAN-REVIEWED.
+- id: input_is_alignment
+  assert: "measured.format in ['bam', 'sam', 'cram']"
+  severity: block
+  message: "samtools sort takes an alignment (BAM/SAM/CRAM); the input is not one."

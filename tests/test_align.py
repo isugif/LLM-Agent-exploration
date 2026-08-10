@@ -49,13 +49,13 @@ def test_parse_minimap2_no_sam(tmp_path):
 
 def test_runner_substitutes_reference():
     contract = {"id": "echotool", "execution": {"argv": ["echo", "ref={reference}", "in={input}"]}}
-    r = run_tool(contract, "reads.fq", "/tmp", reference="genome.fa")
+    r = run_tool(contract, "reads.fq", "/tmp", inputs={"reference": "genome.fa"})
     assert r.ok and "ref=genome.fa" in r.stdout and "in=reads.fq" in r.stdout
 
 
 def test_runner_errors_when_reference_missing():
     contract = {"id": "needsref", "execution": {"argv": ["echo", "{reference}"]}}
-    r = run_tool(contract, "reads.fq", "/tmp", reference=None)   # argv needs {reference}, none given
+    r = run_tool(contract, "reads.fq", "/tmp", inputs=None)      # argv needs {reference}, none given
     assert not r.ok and "requires a reference" in (r.error or "")
 
 
@@ -85,7 +85,7 @@ def test_minimap2_end_to_end(tmp_path):
     reads.write_text("".join(f"@r{i}\n{seq}\n+\n{'I'*len(seq)}\n" for i in range(20)))
     contract = cl.load_contract("minimap2")
     out = tmp_path / "out"
-    r = run_tool(contract, str(reads), str(out), reference=str(ref))
+    r = run_tool(contract, str(reads), str(out), inputs={"reference": str(ref)})
     assert r.ok, r.error
     m = parse_minimap2(str(out))
     assert "percent_mapped" in m and m["n_reads"] == 20

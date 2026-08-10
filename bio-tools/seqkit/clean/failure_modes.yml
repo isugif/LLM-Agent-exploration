@@ -1,8 +1,11 @@
-# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
-# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
-# │ placeholder with expert-reviewed content and delete the markers. Until then │
-# │ the harness REFUSES to route this tool.                                     │
-# └────────────────────────────────────────────────────────────────────────────┘
-- id: HRR_failure_1
-  signal: HRR_stderr substring that indicates this failure
-  fix: HRR_the known fix
+# CLEAN machine section (list). Each item validates against schemas.py:FailureMode. HUMAN-REVIEWED.
+# seqkit logs errors with an [ERRO] prefix on stderr.
+- id: unreadable_or_missing_input
+  signal: "[ERRO]"
+  fix: "seqkit reported an error. Confirm the input path exists and is a valid, non-empty FASTA/FASTQ (or FASTQ.gz)."
+- id: not_fastx
+  signal: "invalid FASTA/FASTQ"
+  fix: "The input did not parse as FASTA/FASTQ. Check the format/compression; seqkit expects fastx, not BAM/other."
+- id: unknown_flag
+  signal: "unknown flag"
+  fix: "A flag is not supported by this seqkit version. Run `seqkit stats -h` and adjust the execution argv."

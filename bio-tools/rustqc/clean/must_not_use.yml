@@ -1,0 +1,18 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Boundary. HUMAN-REVIEWED.
+- id: qc_not_quantification
+  boundary: >
+    rustqc reports QC metrics (assignment rate, duplication, coverage) — it is NOT a differential-
+    expression quantifier. Do not use its featureCounts numbers as a DE count matrix; run
+    featureCounts/salmon for expression quantification.
+  keywords: [differential expression, de analysis, deseq, count matrix, quantify expression, gene counts for de]
+- id: assumes_rnaseq_annotation_match
+  boundary: >
+    RNA-seq metrics (exonic fraction, junctions, dupRadar) assume the reads are RNA-seq aligned to a
+    genome whose GTF matches the reads' organism. Applying it to non-RNA-seq data or a mismatched
+    annotation yields meaningless QC.
+  keywords: [dna-seq, wgs, amplicon, wrong annotation, different organism, non rna-seq, prokaryote no introns]
+- id: not_an_aligner_or_caller
+  boundary: >
+    rustqc consumes an existing alignment; it does not align reads or call variants. Do not treat it
+    as an aligner or a variant caller.
+  keywords: [align, alignment, map reads, variant, snp, call variants]

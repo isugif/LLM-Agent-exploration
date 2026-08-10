@@ -1,0 +1,9 @@
+# CLEAN machine section (list). Validates against schemas.py:Precondition. HUMAN-REVIEWED.
+- id: input_is_alignment
+  assert: "measured.format in ['bam', 'sam', 'cram']"
+  severity: block
+  message: "samtools markdup takes an alignment (BAM/SAM/CRAM); the input is not one."
+- id: coordinate_sorted
+  assert: "measured.sorted == True"
+  severity: block
+  message: "markdup needs a coordinate-sorted alignment. Sort it first: samtools sort -o sorted.bam in.bam"

@@ -20,8 +20,12 @@ from typing import Callable
 from shared.parsers.fastqc_parse import parse_fastqc
 from shared.parsers.multiqc_parse import parse_multiqc
 from shared.parsers.minimap2_parse import parse_minimap2
+from shared.parsers.seqkit_parse import parse_seqkit
+from shared.parsers.rustqc_parse import parse_rustqc
+from shared.parsers.samtools_bam_parse import parse_bam_transform
 from shared.probes.fastq_probe import probe as probe_fastq
 from shared.probes.report_dir_probe import probe_report_dir
+from shared.probes.aln_probe import probe_alignment
 
 Fn = Callable[[str], dict]
 
@@ -30,6 +34,10 @@ PARSERS: dict[str, Fn] = {
     "fastqc": parse_fastqc,
     "multiqc": parse_multiqc,
     "minimap2": parse_minimap2,
+    "seqkit": parse_seqkit,
+    "rustqc": parse_rustqc,
+    "samtools_sort": parse_bam_transform,
+    "samtools_markdup": parse_bam_transform,
 }
 
 # Input probe: input_path -> measured facts. Keyed by input TYPE, shared across tools that take
@@ -37,6 +45,10 @@ PARSERS: dict[str, Fn] = {
 PROBES: dict[str, Fn] = {
     "fastqc": probe_fastq,
     "multiqc": probe_report_dir,
+    # alignment-consuming tools probe a BAM/SAM/CRAM instead of a FASTQ
+    "rustqc": probe_alignment,
+    "samtools_sort": probe_alignment,
+    "samtools_markdup": probe_alignment,
 }
 
 
@@ -47,6 +59,17 @@ def get_parser(tool_id: str) -> Fn:
             f"Add one in shared/tools/registry.py. Known: {sorted(PARSERS)}"
         )
     return PARSERS[tool_id]
+
+
+def parse_output(tool_id: str, out_dir: str) -> dict:
+    """Parse a tool's output, or return an {'error': ...} dict when no parser is registered.
+
+    Lets the evaluation harness say 'cannot_assess' for a reviewed-but-not-yet-parsed tool (e.g. a
+    freshly HRR'd tool) instead of crashing — the right-to-refuse, not a stack trace."""
+    fn = PARSERS.get(tool_id)
+    if fn is None:
+        return {"error": f"no output parser registered for '{tool_id}'; its result cannot be scored yet"}
+    return fn(out_dir)
 
 
 def get_probe(tool_id: str) -> Fn:

@@ -167,6 +167,7 @@ function applyEvent(event, data, ctx, replay) {
     if (p.kind === "tool") { html = toolPanelHTML(p); mode = "tool"; note = "documentation ready"; }
     else if (p.kind === "catalog") { html = catalogPanelHTML(p); mode = "catalog"; note = "tool matches ready"; }
     else if (p.kind === "session") { html = sessionPanelHTML(p); mode = "session"; note = "session history ready"; }
+    else if (p.kind === "folder") { html = folderPanelHTML(p); mode = "folder"; note = "folder contents ready"; setWorkdirLabel(p.workdir); }
     else { html = dataPanelHTML(p); mode = "profile"; note = "data profile ready"; }
     setOutput(html, mode);
     addActivity(note, "ok");
@@ -321,6 +322,19 @@ function sessionPanelHTML(p) {
       kvTable({ when: r.when, output: r.out_dir, question: r.question }) +
       reportControls(r.out_name);
     h += cardHTML(esc(r.tool || "run"), body);
+  }
+  return h;
+}
+
+function folderPanelHTML(p) {
+  let h = `<div><h2>Working directory</h2><div class="file-name">${esc(p.workdir || "")}</div></div>`;
+  if (!p.groups || !p.groups.length) {
+    return h + cardHTML("Empty", `<span class="muted">No recognizable data files here yet.</span>`);
+  }
+  for (const g of p.groups) {
+    const shown = (g.files || []).length;
+    const more = g.count > shown ? `<div class="muted">+${g.count - shown} more</div>` : "";
+    h += cardHTML(`${esc(g.kind)} (${g.count})`, list(g.files) + more);
   }
   return h;
 }
@@ -536,8 +550,17 @@ $("contribute").addEventListener("change", (e) => {
 });
 $("settings").addEventListener("toggle", (e) => { if (e.target.open) refreshDatasetStats(); });
 
-// on load: list sessions, repaint the current one, load settings + stats
-(async () => { await populateSessions(); await replaySession(sid); await loadSettings(); await refreshDatasetStats(); })();
+// ---- working directory: header label + fetch (data paths resolve against this folder) ----
+function setWorkdirLabel(wd) {
+  const el = $("workdir"); if (!el || !wd) return;
+  el.textContent = "📁 " + wd; el.title = "working directory: " + wd;
+}
+async function loadWorkdir() {
+  try { setWorkdirLabel((await (await fetch("/api/workdir")).json()).workdir); } catch (e) { /* offline */ }
+}
+
+// on load: list sessions, repaint the current one, load settings + stats + workdir
+(async () => { await populateSessions(); await replaySession(sid); await loadSettings(); await refreshDatasetStats(); await loadWorkdir(); })();
 
 // ---- tabs (Output / Activity / Terminal) ----
 let currentTab = "output";

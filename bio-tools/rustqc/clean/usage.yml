@@ -1,0 +1,13 @@
+# CLEAN context section (curator-generated). Validates against schemas.py.
+examples:
+- description: top-level invocation showing a command is required
+  command: rustqc <COMMAND>
+- description: RNA-Seq QC — single-pass analysis of BAM/SAM/CRAM files
+  command: rustqc rna
+- description: print this message or the help of the given subcommand(s)
+  command: rustqc help
+- description: print help
+  command: rustqc --help
+- description: print version
+  command: rustqc --version
+note: rustqc provides the 'rna' subcommand for single-pass QC of BAM/SAM/CRAM files.

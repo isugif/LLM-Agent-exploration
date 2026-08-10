@@ -1,0 +1,8 @@
+# CLEAN machine section. Validates against schemas.py:MetaSection. HUMAN-REVIEWED.
+summary: >
+  Mark (not remove) PCR/optical duplicate reads on a coordinate-sorted alignment, writing a
+  duplicate-marked BAM. The prep step rustqc requires. It sets the duplicate flag; it does not delete
+  reads. For paired-end data the input must first pass `samtools fixmate -m` (single-end needs no
+  fixmate).
+expectations_ref: null
+category_tags: [Sequence_Data_Processing_and_Quality_Control]

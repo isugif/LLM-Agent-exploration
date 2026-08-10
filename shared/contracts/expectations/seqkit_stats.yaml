@@ -1,0 +1,24 @@
+# Expected-range table for `seqkit stats` metrics. Scored by the results-evaluation harness against
+# shared/parsers/seqkit_parse.py output. Most seqkit-stats columns (counts, lengths) have no
+# universal "good/bad" range — they are reported, not scored. Only the quality/GC columns carry a
+# meaningful sanity band, and even those are context-noted.
+
+context:
+  task: sequence_stats
+
+metrics:
+  percent_q30:
+    description: "Percent of bases with Phred quality >= 30 (FASTQ only)."
+    unit: percent
+    ok:   { gte: 80 }
+    warn: { between: [50, 80] }
+    fail: { lt: 50 }
+    note: "Q30% is platform-dependent; low values can be normal for long-read data."
+
+  percent_gc:
+    description: "Overall %GC."
+    unit: percent
+    ok:   { between: [30, 60] }
+    warn: { between: [20, 70] }
+    fail: { not_between: [15, 80] }
+    note: "GC content is organism-dependent — a sanity band, not a tight expectation."

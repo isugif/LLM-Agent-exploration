@@ -1,0 +1,5 @@
+# CLEAN context section. Validates against schemas.py:UsageSection.
+examples:
+  - description: "coordinate-sort an alignment into a BAM"
+    command: "samtools sort -o sorted.bam input.sam"
+note: "Sorting is the first prep step before samtools markdup and rustqc."

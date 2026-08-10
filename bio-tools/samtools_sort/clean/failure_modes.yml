@@ -1,0 +1,7 @@
+# CLEAN machine section (list). Validates against schemas.py:FailureMode. HUMAN-REVIEWED.
+- id: unreadable_input
+  signal: "fail to open"
+  fix: "samtools could not open the input. Confirm the path exists and is a valid BAM/SAM/CRAM."
+- id: truncated
+  signal: "truncated"
+  fix: "The input alignment is truncated. Re-generate it (re-run the aligner)."

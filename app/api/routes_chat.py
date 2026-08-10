@@ -22,26 +22,18 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from shared.llm.provider import get_provider
-from shared import catalog, dataset
+from shared import catalog, contracts_lib as cl, dataset
 from app import resolve
 from app.session import STORE
 
 
-def _is_aligner(tool: str) -> bool:
-    """True if the tool's catalog purpose is read alignment (needs a reference genome)."""
-    try:
-        rec = next((r for r in catalog.catalog() if r["tool"] == tool), None)
-        return bool(rec and "Read_Alignment_and_Mapping" in rec.get("category_tags", []))
-    except Exception:  # noqa: BLE001
-        return False
-
-
 def _resolve_tool_name(name: str) -> str | None:
-    """Map a user-typed tool name to a DOCUMENTED tool: exact (case-insensitive), else a unique
-    prefix/substring match (e.g. 'minimap' -> 'minimap2'). None if nothing matches — so an unknown
-    tool is handled gracefully instead of crashing on a missing manifest."""
+    """Map a user-typed tool name to a DOCUMENTED tool: exact (case-insensitive, spaces->underscores
+    so 'samtools sort' -> 'samtools_sort'), else a unique prefix/substring match ('minimap' ->
+    'minimap2'). None if nothing matches — so an unknown tool is handled gracefully instead of
+    crashing on a missing manifest."""
     docs = catalog.available_tools()
-    low = (name or "").lower()
+    low = (name or "").strip().lower().replace(" ", "_")
     if not low:
         return None
     for t in docs:
@@ -51,19 +43,28 @@ def _resolve_tool_name(name: str) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
+def _tool_extra_inputs(tool: str) -> tuple[bool, bool, bool]:
+    """(needs_reference, needs_annotation, consumes_alignment) — data-driven from the tool's contract
+    argv + input probe, so the chat knows what to resolve/ask for."""
+    from shared.tools.registry import PROBES
+    from shared.probes.aln_probe import probe_alignment
+    try:
+        argv = cl.load_contract(tool).get("execution", {}).get("argv", [])
+    except Exception:  # noqa: BLE001
+        argv = []
+    joined = " ".join(argv)
+    return ("{reference}" in joined, "{annotation}" in joined,
+            PROBES.get(tool) is probe_alignment)
+
+
 def _existing_path(p: str | None) -> str | None:
-    """Return the path as given if it exists; tolerate a leading-slash typo for a repo-relative
-    path (e.g. '/shared/data/x' -> 'shared/data/x'). Otherwise return it unchanged (downstream
-    reports a clear open error)."""
-    if not p:
-        return p
-    if os.path.exists(p):
-        return p
-    if p.startswith("/") and os.path.exists(p.lstrip("/")):
-        return p.lstrip("/")
-    return p
+    """Resolve a user-typed data path against the active working directory (app/workdir.py) — the
+    folder the app was launched in, or one set from chat — with a shared/data fallback for demos."""
+    return workdir.resolve_path(p)
+from app import workdir
 from app.intent import classify, stub_text
-from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool, find_tool, session_query
+from app.capabilities import (describe_data, run_pipeline, add_tool, explain_tool, find_tool,
+                              session_query, workdir_cmd)
 
 
 class ChatRequest(BaseModel):
@@ -151,14 +152,33 @@ def make_chat_router() -> APIRouter:
                     return
                 if tool != named:
                     yield rec("log", json.dumps({"text": f"resolved '{named}' → {tool}"}))
+                needs_ref, needs_ann, takes_aln = _tool_extra_inputs(tool)
+                # an alignment-consuming tool takes a BAM/SAM/CRAM as its input, not a FASTQ
+                if takes_aln and not (file and file.lower().endswith((".bam", ".sam", ".cram"))):
+                    file = _existing_path(resolve.aln_in(req.message)) or file
                 reference = _existing_path(resolve.fasta_ref_in(req.message))
-                # onboarding request: an aligner with no reference asks for one instead of defaulting
-                if _is_aligner(tool) and not reference:
+                annotation = _existing_path(resolve.gtf_in(req.message))
+                # onboarding requests: a required second input is asked for, never defaulted
+                if takes_aln and not file:
                     yield rec("prose", json.dumps({"text":
-                        f"**{tool}** aligns reads to a reference genome — which reference should I use? "
-                        "Give me a FASTA path (e.g. `shared/data/NC_045512.2.fasta`)."}))
-                    yield rec("done", "{}")
-                    return
+                        f"**{tool}** works on an alignment — give me a BAM/SAM/CRAM path."}))
+                    yield rec("done", "{}"); return
+                if file and not os.path.exists(file):     # clear "not found" beats a format refusal
+                    yield rec("prose", json.dumps({"text":
+                        f"I can't find `{file}` in `{workdir.get_workdir()}`. Put it in your working "
+                        "directory, give a full path, or point me at the folder with "
+                        "\"my data is in /path/to/folder\"."}))
+                    yield rec("done", "{}"); return
+                if needs_ref and not reference:
+                    yield rec("prose", json.dumps({"text":
+                        f"**{tool}** aligns to a reference genome — which reference? Give me a FASTA path "
+                        "(e.g. `shared/data/NC_045512.2.fasta`)."}))
+                    yield rec("done", "{}"); return
+                if needs_ann and not annotation:
+                    yield rec("prose", json.dumps({"text":
+                        f"**{tool}** needs a gene annotation — which GTF? Give me a path "
+                        "(e.g. `shared/data/Saccharomyces_cerevisiae.R64-1-1.genes.gtf`)."}))
+                    yield rec("done", "{}"); return
                 yield rec("log", json.dumps({"text": f"Running {tool} on {file}…"}))
                 yield rec("plan", json.dumps({"steps": run_pipeline.PLAN}))
                 out_dir = str(STORE.run_dir(sid, tool))   # durable, under the session dir
@@ -167,7 +187,8 @@ def make_chat_router() -> APIRouter:
                 findings: list = []
                 async for kind, payload in _abridge(
                         lambda: run_pipeline.stage_events(req.message, tool, file,
-                                                          req.provider or "auto", out_dir, reference)):
+                                                          req.provider or "auto", out_dir,
+                                                          reference, annotation)):
                     if kind == "error":
                         yield rec("stage", json.dumps({"stage": "error", "title": "Error", "error": payload}))
                         continue
@@ -233,6 +254,19 @@ def make_chat_router() -> APIRouter:
                     yield rec("panel", json.dumps(result["panel"]))
                 yield rec("prose", json.dumps({"text": result.get("prose", "")}))
 
+            elif intent.intent == "describe_workdir":
+                yield rec("log", json.dumps({"text": f"Inspecting {workdir.get_workdir()}…"}))
+                result = await run_in_threadpool(workdir_cmd.describe_run)
+                if result.get("panel") is not None:
+                    yield rec("panel", json.dumps(result["panel"]))
+                yield rec("prose", json.dumps({"text": result.get("prose", "")}))
+
+            elif intent.intent == "set_workdir":
+                result = await run_in_threadpool(workdir_cmd.set_run, req.message)
+                if result.get("panel") is not None:
+                    yield rec("panel", json.dumps(result["panel"]))
+                yield rec("prose", json.dumps({"text": result.get("prose", "")}))
+
             else:
                 yield rec("prose", json.dumps({"text": stub_text(intent)}))
 
@@ -279,6 +313,19 @@ def make_chat_router() -> APIRouter:
         if path is None:
             raise HTTPException(status_code=404, detail="no report for that run")
         return FileResponse(str(path), media_type="text/html")
+
+    # -- working directory (the folder data paths resolve against) -----------
+
+    @router.get("/api/workdir")
+    def get_workdir() -> dict:
+        return {"workdir": str(workdir.get_workdir())}
+
+    @router.post("/api/workdir")
+    def set_workdir(body: dict) -> dict:
+        ok, msg = workdir.set_workdir((body or {}).get("workdir", ""))
+        if not ok:
+            raise HTTPException(status_code=400, detail=msg)
+        return {"workdir": str(workdir.get_workdir()), "message": msg}
 
     # -- settings + local training-data harvest ------------------------------
 

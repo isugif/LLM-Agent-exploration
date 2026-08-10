@@ -1,9 +1,9 @@
-# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
-# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
-# │ placeholder with expert-reviewed content and delete the markers. Until then │
-# │ the harness REFUSES to route this tool.                                     │
-# └────────────────────────────────────────────────────────────────────────────┘
-- id: HRR_precondition_1
-  assert: measured.format == 'HRR_format'
+# CLEAN machine section (list). Each item validates against schemas.py:Precondition. HUMAN-REVIEWED.
+- id: input_is_fastq
+  assert: "measured.format == 'fastq'"
   severity: block
-  message: HRR_what must hold about the input
+  message: "This seqkit-stats contract is probed for FASTQ input; the input did not parse as FASTQ. (seqkit also handles FASTA, but a FASTA probe isn't wired yet.)"
+- id: reads_present
+  assert: "measured.n_reads_sampled > 0"
+  severity: block
+  message: "No sequences found in the input; nothing to summarize."

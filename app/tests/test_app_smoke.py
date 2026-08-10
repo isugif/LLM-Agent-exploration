@@ -170,7 +170,73 @@ def test_chat_persists_transcript(session_dir, offline):
     assert {"meta", "panel", "prose", "done"} <= kinds     # enough to repaint chat + tabs
 
 
-def test_run_pipeline_tool_name_resolution(session_dir, offline, monkeypatch):
+def test_existing_path_resolves_from_workdir(tmp_path, monkeypatch):
+    """A bare filename / wrong-dir slip resolves against the active workdir; unknown paths pass through."""
+    import app.api.routes_chat as rc
+    from app import workdir
+    (tmp_path / "reads.fastq.gz").write_text("x")
+    monkeypatch.setattr(workdir, "_workdir", tmp_path)
+    assert rc._existing_path("reads.fastq.gz") == str(tmp_path / "reads.fastq.gz")        # bare name
+    assert rc._existing_path("data/shared/reads.fastq.gz") == str(tmp_path / "reads.fastq.gz")  # by basename
+    assert rc._existing_path("nope.fastq.gz") == "nope.fastq.gz"                          # unresolved unchanged
+
+
+def test_resolve_workdir_offline():
+    """'set my working directory / my data is in' -> set_workdir; 'what's in my folder' -> describe."""
+    assert ground("set my working directory to /tmp/run1").intent == "set_workdir"
+    assert ground("my data is in /data/yeast").intent == "set_workdir"
+    assert ground("cd /tmp/x").intent == "set_workdir"
+    assert ground("what's in my folder?").intent == "describe_workdir"
+    assert ground("list my files").intent == "describe_workdir"
+    assert ground("what's my working directory?").intent == "describe_workdir"
+    # a run/describe request must NOT be hijacked by the workdir detectors
+    assert ground("run fastqc on reads.fastq.gz").intent == "run_pipeline"
+    assert ground("which tool takes fastq?").intent == "find_tool"
+
+
+def test_workdir_path_extraction():
+    from app import resolve
+    assert resolve.workdir_path("set my working directory to /data/run1") == "/data/run1"
+    assert resolve.workdir_path("my data is in ~/yeast/") == "~/yeast/"
+    assert resolve.workdir_path("cd /tmp/x.") == "/tmp/x"        # trailing punctuation trimmed
+    assert resolve.workdir_path("tell me about fastqc") is None
+
+
+@pytest.fixture()
+def reset_workdir():
+    """Snapshot + restore the process-global workdir so a mutating test doesn't leak."""
+    from app import workdir
+    orig = workdir._workdir
+    yield
+    workdir._workdir = orig
+
+
+def test_chat_workdir_api_and_dispatch(session_dir, offline, tmp_path, reset_workdir):
+    import gzip
+    from app import workdir
+    data = tmp_path / "run1"; data.mkdir()
+    with gzip.open(data / "a.fastq.gz", "wt") as fh:
+        fh.write("@r\nACGT\n+\nIIII\n")
+    (data / "samples.csv").write_text("id,cond\n")
+    client = TestClient(create_app())
+    # POST /api/workdir sets it; GET reads it back
+    assert client.post("/api/workdir", json={"workdir": str(data)}).json()["workdir"] == str(data)
+    assert client.get("/api/workdir").json()["workdir"] == str(data)
+    client.post("/api/workdir", json={"workdir": str(tmp_path / "nope")}).status_code == 400
+    # chat: "what's in my folder" -> a folder panel grouping the two files
+    ev = _parse_sse(client.post("/api/chat", json={"message": "what's in my folder?"}).text)
+    assert json.loads(ev["meta"])["intent"] == "describe_workdir"
+    panel = json.loads(ev["panel"])
+    assert panel["kind"] == "folder"
+    kinds = {g["kind"] for g in panel["groups"]}
+    assert {"fastq", "metadata"} <= kinds
+    # chat: "my data is in <dir>" -> set_workdir, confirmed
+    ev2 = _parse_sse(client.post("/api/chat", json={"message": f"my data is in {data}"}).text)
+    assert json.loads(ev2["meta"])["intent"] == "set_workdir"
+    assert workdir.get_workdir() == data
+
+
+def test_run_pipeline_tool_name_resolution(session_dir, offline, monkeypatch, fastq):
     """A user-typed tool name is resolved (minimap->minimap2) or handled gracefully (bwa),
     never crashing on a missing manifest — the bug from the 'using minimap' session."""
     import app.api.routes_chat as rc
@@ -178,7 +244,7 @@ def test_run_pipeline_tool_name_resolution(session_dir, offline, monkeypatch):
 
     def fake_classify(tool):
         def _c(message, provider, history=None):
-            return Intent(intent="run_pipeline", tool=tool, files=["shared/data/x.fastq.gz"])
+            return Intent(intent="run_pipeline", tool=tool, files=[fastq])   # a real file (exists)
         return _c
 
     client = TestClient(create_app())

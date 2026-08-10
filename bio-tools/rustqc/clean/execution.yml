@@ -1,0 +1,5 @@
+# CLEAN machine section. Validates against schemas.py:ExecutionSection. HUMAN-REVIEWED.
+# {input} = a coordinate-sorted, duplicate-marked BAM/SAM/CRAM; {annotation} = a GTF (required).
+argv: [rustqc, rna, --gtf, "{annotation}", -o, "{out_dir}", -j, "{out_dir}/summary.json", "{input}"]
+version_argv: [rustqc, --version]
+install_hint: "mamba install -c bioconda rustqc"

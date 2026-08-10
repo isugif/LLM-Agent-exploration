@@ -1,13 +1,5 @@
-# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
-# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
-# │ placeholder with expert-reviewed content and delete the markers. Until then │
-# │ the harness REFUSES to route this tool.                                     │
-# └────────────────────────────────────────────────────────────────────────────┘
-argv:
-- HRR_tool
-- '{input}'
-- '{out_dir}'
-version_argv:
-- HRR_tool
-- --version
-install_hint: HRR_install command
+# CLEAN machine section. Validates against schemas.py:ExecutionSection. HUMAN-REVIEWED.
+# Routes `seqkit stats`: read-only summary stats to a TSV. -a = all stats, -T = tab-delimited.
+argv: [seqkit, stats, -a, -T, -o, "{out_dir}/stats.tsv", "{input}"]
+version_argv: [seqkit, version]
+install_hint: "mamba install -c bioconda seqkit"

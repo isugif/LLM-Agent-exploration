@@ -1,10 +1,18 @@
-# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
-# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
-# │ placeholder with expert-reviewed content and delete the markers. Until then │
-# │ the harness REFUSES to route this tool.                                     │
-# └────────────────────────────────────────────────────────────────────────────┘
-- id: HRR_boundary_1
-  boundary: HRR_an off-label use that would produce a silently-wrong result (expert
-    judgment)
-  keywords:
-  - HRR_keyword
+# CLEAN machine section (list). Each item validates against schemas.py:Boundary. HUMAN-REVIEWED.
+- id: stats_not_quality_verdict
+  boundary: >
+    `seqkit stats` reports raw numbers (counts, lengths, GC, Q20/Q30), not a QC pass/fail judgment.
+    Do not treat the stats table as a quality verdict — it is not a substitute for FastQC's
+    per-module assessment.
+  keywords: [quality pass, qc verdict, is this good quality, quality assessment, pass or fail]
+- id: not_an_analyzer
+  boundary: >
+    seqkit manipulates and summarizes sequences; it does not align, assemble, call variants, or
+    quantify expression. Do not draw biological/analysis conclusions from it.
+  keywords: [align, alignment, assemble, assembly, variant, snp, expression, quantify, annotate]
+- id: stats_contract_is_read_only
+  boundary: >
+    This contract routes the READ-ONLY `stats` command. The mutating seqkit subcommands (rmdup,
+    sample, split, seq filters) WRITE new sequence files and are a different operation — do not
+    assume this contract trims, deduplicates, or subsets reads.
+  keywords: [rmdup, deduplicate, trim, subsample, split, filter reads, remove duplicates, clean reads]

@@ -1,0 +1,5 @@
+# CLEAN context section. Validates against schemas.py:UsageSection.
+examples:
+  - description: "mark duplicates on a coordinate-sorted BAM (single-end)"
+    command: "samtools markdup -s sorted.bam markdup.bam"
+note: "For paired-end, prep with samtools fixmate -m first. Marks duplicates; does not remove them."

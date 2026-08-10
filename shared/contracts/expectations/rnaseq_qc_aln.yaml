@@ -1,0 +1,30 @@
+# Expected-range table for alignment-level RNA-seq QC — scored by the evaluation harness against
+# shared/parsers/rustqc_parse.py output. Lenient + context-noted: RNA-seq duplication is frequently
+# biological (highly expressed transcripts), and assignment rate depends on the annotation.
+
+context:
+  task: rnaseq_alignment_qc
+
+metrics:
+  percent_mapped:
+    description: "Percent of reads that mapped to the reference."
+    unit: percent
+    ok:   { gte: 70 }
+    warn: { between: [30, 70] }
+    fail: { lt: 30 }
+
+  percent_assigned:
+    description: "Percent of reads assigned to annotated features (featureCounts)."
+    unit: percent
+    ok:   { gte: 60 }
+    warn: { between: [30, 60] }
+    fail: { lt: 30 }
+    note: "Assignment rate depends on the GTF and library type; low values warrant checking the annotation/strandedness before treating as a failure."
+
+  percent_duplicate:
+    description: "Percent duplicate reads."
+    unit: percent
+    ok:   { lt: 50 }
+    warn: { between: [50, 80] }
+    fail: { gte: 80 }
+    note: "High duplication is common and often NORMAL in RNA-seq (highly expressed transcripts). Treat as a flag to investigate, not an automatic failure."

@@ -23,6 +23,8 @@ from typing import Optional
 FASTQ_RE = re.compile(r"\S+\.(?:fastq|fq)(?:\.gz)?", re.IGNORECASE)
 # a reference FASTA path; the negative lookahead stops '.fa' from matching inside '.fastq'
 FASTA_RE = re.compile(r"\S+\.(?:fasta|fna|fa)(?:\.gz)?(?![A-Za-z0-9])", re.IGNORECASE)
+ALN_RE = re.compile(r"\S+\.(?:bam|sam|cram)(?![A-Za-z0-9])", re.IGNORECASE)          # an alignment
+GTF_RE = re.compile(r"\S+\.(?:gtf|gff3|gff)(?:\.gz)?(?![A-Za-z0-9])", re.IGNORECASE)  # an annotation
 FLAG_RE = re.compile(r"(?:^|\s)--?[A-Za-z][\w-]*")
 _RUN_RE = re.compile(r"\brun\b", re.IGNORECASE)
 _ADD_RE = re.compile(r"\b(?:install|add(?:\s+the)?(?:\s+tool)?)\s+([A-Za-z0-9][\w.\-]+)", re.IGNORECASE)
@@ -44,6 +46,19 @@ _OUTPUT_RE = re.compile(r"\b(?:output|outputs|results?|report|reports|summary|ve
 _SESSION_META_RE = re.compile(
     r"\b(?:what|which)\b.{0,20}\bsession\b|\bsession\s*id\b|\bsession\s*info\b"
     r"|\bhow many runs\b|\bwhat tools?\b.{0,20}\b(?:used|run|ran)\b", re.IGNORECASE)
+# working-directory control. SET: "set my working dir to X", "my data is in X", "cd X", "work in X"
+# (captures the folder). DESCRIBE: "what's in my folder", "list my files", "what's my workdir".
+_SET_WD_RE = re.compile(
+    r"(?:set\s+(?:my\s+)?(?:working\s+)?(?:dir(?:ectory)?|workdir|cwd|folder)\s+to"
+    r"|(?:my\s+)?data\s+(?:is|are|lives?)\s+in"
+    r"|use\s+(?:folder|directory|dir)"
+    r"|\bcd)\s+(?P<path>\S.*?)\s*$", re.IGNORECASE)
+_DESC_WD_RE = re.compile(
+    r"what(?:'s|\s+is)?\s+in\s+(?:my|the|this)\s+(?:folder|dir(?:ectory)?|workdir|working\s+dir(?:ectory)?)"
+    r"|list\s+(?:my|the)\s+(?:files?|data|folder)"
+    r"|what\s+(?:data|files?)\s+(?:do\s+i\s+have|are\s+(?:there|here|available))"
+    r"|what(?:'s|\s+is)?\s+my\s+(?:current\s+|working\s+)?(?:dir(?:ectory)?|workdir|cwd|folder)"
+    r"|show\s+(?:me\s+)?(?:my|the)\s+(?:folder|files?|working\s+dir(?:ectory)?)", re.IGNORECASE)
 
 # Slots each intent needs before it can act. If unresolved after grounding, the router asks.
 # (run_pipeline's tool defaults to fastqc, so only `file` is required.)
@@ -79,6 +94,18 @@ def fastq_in(text: str) -> Optional[str]:
 def fasta_ref_in(text: str) -> Optional[str]:
     """A reference-genome FASTA path mentioned in the message (for aligners)."""
     m = FASTA_RE.findall(text or "")
+    return m[0] if m else None
+
+
+def aln_in(text: str) -> Optional[str]:
+    """A BAM/SAM/CRAM alignment path mentioned in the message (for rustqc / samtools tools)."""
+    m = ALN_RE.findall(text or "")
+    return m[0] if m else None
+
+
+def gtf_in(text: str) -> Optional[str]:
+    """A GTF/GFF annotation path mentioned in the message (for rustqc)."""
+    m = GTF_RE.findall(text or "")
     return m[0] if m else None
 
 
@@ -123,6 +150,22 @@ def session_meta_question(message: str) -> bool:
     return bool(_SESSION_META_RE.search(message or ""))
 
 
+def workdir_path(message: str) -> Optional[str]:
+    """The folder path from a 'set working directory' message, if any."""
+    m = _SET_WD_RE.search(message or "")
+    if not m:
+        return None
+    return (m.group("path") or "").strip().strip("\"'`").rstrip(".,")
+
+
+def set_workdir_question(message: str) -> bool:
+    return workdir_path(message) is not None
+
+
+def describe_workdir_question(message: str) -> bool:
+    return bool(_DESC_WD_RE.search(message or ""))
+
+
 _SESSION_INTENTS = ("other", "explain_tool", "find_tool", "describe_data", "propose_strategy")
 
 
@@ -135,6 +178,16 @@ def resolve(intent, message: str, history: Optional[list[dict]],
     of demanding a file.
     """
     notes: list[str] = []
+
+    # 0) working-directory control — set/inspect the folder the app resolves data paths against.
+    #    Checked first (strong, explicit phrasing) and short-circuits the rest of resolution.
+    if set_workdir_question(message):
+        intent.intent = "set_workdir"; notes.append("intent=set_workdir")
+        return notes
+    if describe_workdir_question(message):
+        intent.intent = "describe_workdir"; notes.append("intent=describe_workdir")
+        return notes
+
     named = tool_in(message)
     fq = fastq_in(message)
     has_runs = bool(session and session.get("has_runs"))
@@ -161,6 +214,10 @@ def resolve(intent, message: str, history: Optional[list[dict]],
     if intent.intent == "other":
         if fq and _RUN_RE.search(message):
             intent.intent = "run_pipeline"; notes.append("intent=run_pipeline (FASTQ + 'run')")
+        elif _RUN_RE.search(message) and named and aln_in(message):
+            # "run rustqc on x.bam" — a BAM-input tool named + an alignment path + 'run'
+            intent.intent = "run_pipeline"; intent.tool = named
+            notes.append(f"intent=run_pipeline tool={named} (alignment + 'run')")
         elif fq:
             intent.intent = "describe_data"; notes.append("intent=describe_data (FASTQ present)")
         elif add_tool_name(message):
@@ -182,7 +239,9 @@ def resolve(intent, message: str, history: Optional[list[dict]],
             if lt:
                 intent.tool = lt; notes.append(f"tool={lt} (from history)")
     if intent.intent in _WANTS_FILE and not intent.files:
-        f = fq or last_entity(history, "file")
+        # the run input may be a FASTQ or an alignment (BAM/SAM/CRAM, for rustqc/samtools tools)
+        f = fq or (aln_in(message) if intent.intent == "run_pipeline" else None) \
+            or last_entity(history, "file")
         if f:
             intent.files = [f]; notes.append(f"file={f}" + ("" if fq else " (from history)"))
     return notes

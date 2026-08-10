@@ -1,0 +1,12 @@
+# Per-tool index. Validates against shared/sections/schemas.py:Manifest. HUMAN-REVIEWED.
+# A BAM->BAM transform: mark (not remove) PCR/optical duplicates on a coordinate-sorted alignment.
+tool: samtools_markdup
+version: "1.x"
+runtimes: []
+sections:
+  - {name: meta,          purpose: "summary + expectations link",     load_when: always, machine: true,  path: clean/meta.yml}
+  - {name: execution,     purpose: "how to run samtools markdup",     load_when: always, machine: true,  path: clean/execution.yml}
+  - {name: preconditions, purpose: "sorted alignment required",       load_when: always, machine: true,  path: clean/preconditions.yml}
+  - {name: must_not_use,  purpose: "off-label boundaries",            load_when: always, machine: true,  path: clean/must_not_use.yml}
+  - {name: failure_modes, purpose: "crash signals + fixes",           load_when: always, machine: true,  path: clean/failure_modes.yml}
+  - {name: usage,         purpose: "representative invocations",      load_when: always, machine: false, path: clean/usage.yml}

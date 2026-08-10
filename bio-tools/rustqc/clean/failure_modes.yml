@@ -1,0 +1,13 @@
+# CLEAN machine section (list). Each item validates against schemas.py:FailureMode. HUMAN-REVIEWED.
+- id: missing_gtf_arg
+  signal: "required arguments were not provided"
+  fix: "rustqc rna requires --gtf <annotation>. Provide a GTF gene annotation matching the reference."
+- id: cram_needs_reference
+  signal: "reference"
+  fix: "CRAM input needs the reference FASTA — pass --reference <fasta> (or convert CRAM->BAM)."
+- id: not_sorted
+  signal: "not sorted"
+  fix: "Coordinate-sort the alignment first: samtools sort -o sorted.bam in.bam."
+- id: unreadable_alignment
+  signal: "failed to open"
+  fix: "rustqc could not open the alignment or GTF. Confirm both paths exist and are readable."

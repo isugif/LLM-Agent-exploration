@@ -13,7 +13,7 @@ from nooa.strategies import PredictStrategy
 
 from shared import contracts_lib as cl
 from shared.harness_steps import evaluation_verdict, score_metrics
-from shared.tools.registry import get_parser
+from shared.tools.registry import parse_output
 from shared.models import Verdict
 
 
@@ -33,7 +33,7 @@ class EvaluationAgent(Agent):
 
     # --- deterministic tools ---
     def parse(self, output_dir: str) -> dict:
-        return get_parser(self.tool_id)(output_dir)
+        return parse_output(self.tool_id, output_dir)
 
     def score(self, metrics: dict):
         return score_metrics(self.expectations, metrics)

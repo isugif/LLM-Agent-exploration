@@ -24,14 +24,14 @@ PLAN = ["onboarding", "judgment", "execution", "evaluation"]
 
 def stage_events(message: str, tool: str, file: str,
                  provider: str = "auto", out_dir: Optional[str] = None,
-                 reference: Optional[str] = None) -> Iterator[tuple[str, dict]]:
+                 reference: Optional[str] = None, annotation: Optional[str] = None) -> Iterator[tuple[str, dict]]:
     """Blocking generator: yield (node_name, delta) as the pipeline runs. `provider` selects the LLM
     each harness node uses (onboarding/judgment/evaluation), honoring the UI dropdown. `out_dir`, when
     given, is a durable session-scoped output directory (else the execution node mkdtemps one).
-    `reference` is the genome FASTA for aligners (a second input)."""
+    `reference` is a genome FASTA (aligners); `annotation` is a GTF (rustqc) — both second inputs."""
     graph = build_graph()
     state = {"tool": tool, "fastq": file, "question": message, "deliverable": message,
-             "provider": provider, "reference": reference}
+             "provider": provider, "reference": reference, "annotation": annotation}
     if out_dir:
         state["out_dir"] = out_dir
     for update in graph.stream(state):
