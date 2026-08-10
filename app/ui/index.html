@@ -22,6 +22,16 @@
             <option value="claude">Claude</option>
           </select>
         </label>
+        <details class="settings" id="settings">
+          <summary title="local training-data collection">⚙ data</summary>
+          <div class="settings-body">
+            <label class="ck"><input type="checkbox" id="contribute" /> Contribute data (send back)</label>
+            <div class="muted" id="dataset-count">—</div>
+            <a id="dataset-download" href="/api/dataset/export">Download dataset ↓</a>
+            <div class="muted note">Every LLM interaction is logged <b>locally</b> on your machine.
+              Nothing is sent anywhere; “contribute” only records consent for a future upload.</div>
+          </div>
+        </details>
       </header>
 
       <div id="log" class="log">

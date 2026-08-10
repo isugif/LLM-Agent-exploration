@@ -126,21 +126,41 @@ class SessionStore:
 
     def load_runs(self, sid: str) -> list[dict[str, Any]]:
         """All run records for a session, oldest-first ([] for an unknown/empty session)."""
+        return self._load_jsonl(sid, "runs.jsonl")
+
+    # -- the chat transcript (for repainting a session on reload) ------------
+
+    def append_turn(self, sid: str, turn: dict[str, Any]) -> None:
+        """Append one chat turn's event stream to <sid>/transcript.jsonl. Never raises."""
+        try:
+            sid = self.ensure(sid)
+            rec = {"ts": _now(), **turn}
+            with (self.base_dir / sid / "transcript.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(rec))
+                fh.write("\n")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def load_transcript(self, sid: str) -> list[dict[str, Any]]:
+        """All chat turns for a session, oldest-first — each {ts, question, events:[...]}."""
+        return self._load_jsonl(sid, "transcript.jsonl")
+
+    def _load_jsonl(self, sid: str, name: str) -> list[dict[str, Any]]:
         if not self._valid(sid):
             return []
-        path = self.base_dir / sid / "runs.jsonl"
+        path = self.base_dir / sid / name
         if not path.exists():
             return []
-        runs = []
+        out = []
         for line in path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue
             try:
-                runs.append(json.loads(line))
+                out.append(json.loads(line))
             except json.JSONDecodeError:
                 continue
-        return runs
+        return out
 
     def list_sessions(self) -> list[dict[str, Any]]:
         """One summary per session, newest-first: {sid, created, n_runs, last_question}."""
@@ -160,6 +180,30 @@ class SessionStore:
                 "last_question": runs[-1].get("question") if runs else None,
             })
         return sorted(out, key=lambda s: s["created"], reverse=True)
+
+
+    # -- app settings (consent flag for a future upload; does NOT gate local collection) ----
+
+    def _settings_path(self) -> Path:
+        return self.base_dir.parent / "settings.json"      # ~/.bio_chat/settings.json
+
+    def get_settings(self) -> dict[str, Any]:
+        try:
+            p = self._settings_path()
+            data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        return {"contribute_data": bool(data.get("contribute_data", False))}
+
+    def save_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
+        current = self.get_settings()
+        if "contribute_data" in settings:
+            current["contribute_data"] = bool(settings["contribute_data"])
+        try:
+            self._settings_path().write_text(json.dumps(current), encoding="utf-8")
+        except OSError:
+            pass
+        return current
 
 
 # Module-level singleton the routes/capabilities share.

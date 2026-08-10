@@ -46,6 +46,29 @@ def ollama_available(host: str = OLLAMA_HOST) -> bool:
         return False
 
 
+def _harvest(kind: str, model, system: str, prompt: str, response: str,
+             *, ok: bool = True, labels: Optional[dict] = None) -> None:
+    """Log one LLM interaction to the local dataset. Best-effort, never raises (lazy import so a
+    missing dataset module can't break inference)."""
+    try:
+        from shared import dataset
+        dataset.record(kind, model=model, system=system, prompt=prompt, response=response,
+                       ok=ok, labels=labels)
+    except Exception:                        # noqa: BLE001
+        pass
+
+
+def _parse_into(schema_model: Type[T], content: str) -> Optional[T]:
+    """Validate model output into the schema (JSON string or dict), or None."""
+    try:
+        return schema_model.model_validate_json(content)
+    except Exception:                        # noqa: BLE001
+        try:
+            return schema_model.model_validate(json.loads(content))
+        except Exception:                    # noqa: BLE001
+            return None
+
+
 class NullProvider:
     """Fallback used when no LLM is reachable. Never raises."""
 
@@ -89,20 +112,21 @@ class OllamaProvider:
         try:
             content = self._chat(system, prompt, fmt=schema_model.model_json_schema())
         except Exception:                    # noqa: BLE001
+            _harvest("extract", self.model, system, prompt, "", ok=False)
             return None
-        try:
-            return schema_model.model_validate_json(content)
-        except Exception:                    # noqa: BLE001 - malformed model output -> treat as no answer
-            try:
-                return schema_model.model_validate(json.loads(content))
-            except Exception:                # noqa: BLE001
-                return None
+        parsed = _parse_into(schema_model, content)
+        _harvest("extract", self.model, system, prompt, content, ok=parsed is not None,
+                 labels={"schema": schema_model.__name__})
+        return parsed
 
     def complete(self, system: str, prompt: str) -> str:
         try:
-            return self._chat(system, prompt)
+            out = self._chat(system, prompt)
         except Exception:                    # noqa: BLE001
+            _harvest("complete", self.model, system, prompt, "", ok=False)
             return LLM_UNAVAILABLE
+        _harvest("complete", self.model, system, prompt, out, ok=True)
+        return out
 
 
 def _strip_fence(text: str) -> str:
@@ -134,11 +158,18 @@ class ClaudeCLIProvider:
         except Exception:                    # noqa: BLE001
             return False
 
+    @property
+    def model(self) -> str:
+        return getattr(self._cli, "model", "claude")
+
     def complete(self, system: str, prompt: str) -> str:
         try:
-            return self._cli.run(f"{system}\n\n{prompt}")
+            out = self._cli.run(f"{system}\n\n{prompt}")
         except Exception:                    # noqa: BLE001
+            _harvest("complete", self.model, system, prompt, "", ok=False)
             return LLM_UNAVAILABLE
+        _harvest("complete", self.model, system, prompt, out, ok=True)
+        return out
 
     def extract(self, schema_model: Type[T], system: str, prompt: str) -> Optional[T]:
         schema = json.dumps(schema_model.model_json_schema())
@@ -147,14 +178,12 @@ class ClaudeCLIProvider:
         try:
             out = _strip_fence(self._cli.run(instruction))
         except Exception:                    # noqa: BLE001
+            _harvest("extract", self.model, system, prompt, "", ok=False)
             return None
-        try:
-            return schema_model.model_validate_json(out)
-        except Exception:                    # noqa: BLE001
-            try:
-                return schema_model.model_validate(json.loads(out))
-            except Exception:                # noqa: BLE001
-                return None
+        parsed = _parse_into(schema_model, out)
+        _harvest("extract", self.model, system, prompt, out, ok=parsed is not None,
+                 labels={"schema": schema_model.__name__})
+        return parsed
 
 
 def get_provider(name: Optional[str] = None):

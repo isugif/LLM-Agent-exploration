@@ -78,6 +78,23 @@ def test_load_runs_unknown_or_bad_sid(store):
     assert store.load_runs(store.ensure(None)) == []            # valid but no runs yet
 
 
+def test_transcript_roundtrip(store):
+    sid = store.ensure(None)
+    store.append_turn(sid, {"question": "run fastqc",
+                            "events": [{"event": "meta", "data": "{}"}, {"event": "prose", "data": "{}"}]})
+    store.append_turn(sid, {"question": "results?", "events": [{"event": "prose", "data": "{}"}]})
+    turns = store.load_transcript(sid)
+    assert [t["question"] for t in turns] == ["run fastqc", "results?"]
+    assert len(turns[0]["events"]) == 2
+    assert store.load_transcript("../x") == []      # bad sid → empty
+
+
+def test_settings_roundtrip(store):
+    assert store.get_settings()["contribute_data"] is False   # default off
+    assert store.save_settings({"contribute_data": True})["contribute_data"] is True
+    assert store.get_settings()["contribute_data"] is True     # persisted
+
+
 def test_list_sessions_newest_first(store):
     a = store.ensure(None)
     store.append_run(a, {"tool": "fastqc", "question": "first"})

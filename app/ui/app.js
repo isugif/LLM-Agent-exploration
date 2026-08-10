@@ -147,6 +147,48 @@ function addMsg(text, who, cls) {
   return div;
 }
 
+// One render path for BOTH live streaming and replay. `ctx` carries the assistant bubble + a
+// mutable planSteps holder; `replay` skips live-only affordances (progress bar, sid adoption).
+function applyEvent(event, data, ctx, replay) {
+  if (event === "meta") {
+    const m = JSON.parse(data);
+    if (!replay && m.sid && m.sid !== sid) { sid = m.sid; localStorage.setItem("bioSid", sid); }
+    addActivity(`intent: ${m.intent} · model: ${m.provider}`, "meta");
+    term(`[meta] intent=${m.intent} model=${m.provider}`);
+  } else if (event === "plan") {
+    ctx.planSteps = JSON.parse(data).steps;
+    if (!replay) setProgressTotal(ctx.planSteps.length);
+  } else if (event === "log") {
+    const t = JSON.parse(data).text;
+    addActivity(t, "think"); if (!replay) setThinking(ctx.thinking, t); term("… " + t);
+  } else if (event === "panel") {
+    const p = JSON.parse(data);
+    let html, mode, note;
+    if (p.kind === "tool") { html = toolPanelHTML(p); mode = "tool"; note = "documentation ready"; }
+    else if (p.kind === "catalog") { html = catalogPanelHTML(p); mode = "catalog"; note = "tool matches ready"; }
+    else if (p.kind === "session") { html = sessionPanelHTML(p); mode = "session"; note = "session history ready"; }
+    else { html = dataPanelHTML(p); mode = "profile"; note = "data profile ready"; }
+    setOutput(html, mode);
+    addActivity(note, "ok");
+  } else if (event === "stage") {
+    const ev = JSON.parse(data);
+    appendStage(ev);
+    addActivity(stageLine(ev), "stage");
+    if (!replay) { setThinking(ctx.thinking, stageLine(ev)); advanceProgress(ev, ctx.planSteps); }
+    termStage(ev);
+  } else if (event === "prose") {
+    const t = JSON.parse(data).text;
+    ctx.thinking.classList.remove("thinking");
+    ctx.thinking.textContent = t;
+    log.scrollTop = log.scrollHeight;
+    term("[response] " + t);
+    convo.push({ role: "assistant", content: t });
+    if (convo.length > 40) convo = convo.slice(-40);
+  } else if (event === "done") {
+    addActivity("done", "done");
+  }
+}
+
 async function send(message, file, provider, signal, history) {
   const resp = await fetch("/api/chat", {
     method: "POST",
@@ -156,59 +198,35 @@ async function send(message, file, provider, signal, history) {
   });
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
 
-  const thinking = addMsg("…", "assistant", "thinking");
+  const ctx = { thinking: addMsg("…", "assistant", "thinking"), planSteps: null };
   startWork();
-  let planSteps = null;
   try {
-    for await (const { event, data } of sse(resp)) {
-      if (event === "meta") {
-        const m = JSON.parse(data);
-        if (m.sid && m.sid !== sid) { sid = m.sid; localStorage.setItem("bioSid", sid); }
-        addActivity(`intent: ${m.intent} · model: ${m.provider}`, "meta");
-        term(`[meta] intent=${m.intent} model=${m.provider}`);
-      } else if (event === "plan") {
-        planSteps = JSON.parse(data).steps;
-        setProgressTotal(planSteps.length);
-      } else if (event === "log") {
-        const t = JSON.parse(data).text;
-        addActivity(t, "think"); setThinking(thinking, t); term("… " + t);
-      } else if (event === "panel") {
-        const p = JSON.parse(data);
-        let html, mode, note;
-        if (p.kind === "tool") { html = toolPanelHTML(p); mode = "tool"; note = "documentation ready"; }
-        else if (p.kind === "catalog") { html = catalogPanelHTML(p); mode = "catalog"; note = "tool matches ready"; }
-        else if (p.kind === "session") { html = sessionPanelHTML(p); mode = "session"; note = "session history ready"; }
-        else { html = dataPanelHTML(p); mode = "profile"; note = "data profile ready"; }
-        setOutput(html, mode);
-        addActivity(note, "ok");
-      } else if (event === "stage") {
-        const ev = JSON.parse(data);
-        appendStage(ev);
-        addActivity(stageLine(ev), "stage");
-        setThinking(thinking, stageLine(ev));
-        advanceProgress(ev, planSteps);
-        termStage(ev);
-      } else if (event === "prose") {
-        const t = JSON.parse(data).text;
-        thinking.classList.remove("thinking");
-        thinking.textContent = t;
-        log.scrollTop = log.scrollHeight;
-        term("[response] " + t);
-        convo.push({ role: "assistant", content: t });
-        if (convo.length > 40) convo = convo.slice(-40);
-      } else if (event === "done") {
-        addActivity("done", "done");
-      }
-    }
+    for await (const { event, data } of sse(resp)) applyEvent(event, data, ctx, false);
   } catch (e) {
     if (e.name === "AbortError") {
-      thinking.classList.remove("thinking");
-      thinking.textContent = "⏹ Stopped. (the server may finish this step in the background)";
+      ctx.thinking.classList.remove("thinking");
+      ctx.thinking.textContent = "⏹ Stopped. (the server may finish this step in the background)";
     }
     throw e;
   } finally {
     endWork();
   }
+}
+
+// Repaint a saved session: replay each turn's stored event stream through the same render path.
+async function replaySession(targetSid) {
+  let turns = [];
+  try { turns = (await (await fetch(`/api/sessions/${targetSid}/transcript`)).json()).turns || []; }
+  catch (e) { return false; }
+  if (!turns.length) return false;
+  log.innerHTML = "";                                 // drop the greeting / any prior chat
+  for (const t of turns) {
+    if (t.question) { addMsg(t.question, "user"); convo.push({ role: "user", content: t.question }); }
+    startTurn(t.question || "(session)");
+    const ctx = { thinking: addMsg("…", "assistant", "thinking"), planSteps: null };
+    for (const ev of (t.events || [])) applyEvent(ev.event, ev.data, ctx, true);   // prose pushes assistant → convo
+  }
+  return turns.length > 0;
 }
 
 function stageLine(ev) {
@@ -482,18 +500,44 @@ async function switchSession(target) {
   }
   sid = target; localStorage.setItem("bioSid", sid);
   resetWorkspace();
-  addMsg(`Loaded session ${sid.slice(0, 8)}…`, "assistant");
-  try {
-    const runs = (await (await fetch(`/api/sessions/${sid}/runs`)).json()).runs || [];
-    startTurn(`session ${sid.slice(0, 8)}`);
-    setOutput(sessionPanelHTML(runsToPanel(runs)), "session");
-    switchTab("output");
-  } catch (e) { addMsg("Couldn't load that session.", "assistant", "warn"); }
+  const had = await replaySession(sid);               // repaint chat + all tabs from the transcript
+  if (!had) {
+    // no saved transcript (older/empty session) — fall back to the run-log output panel
+    addMsg(`Loaded session ${sid.slice(0, 8)}… (no chat history saved)`, "assistant");
+    try {
+      const runs = (await (await fetch(`/api/sessions/${sid}/runs`)).json()).runs || [];
+      if (runs.length) { startTurn(`session ${sid.slice(0, 8)}`); setOutput(sessionPanelHTML(runsToPanel(runs)), "session"); }
+    } catch (e) { /* ignore */ }
+  }
+  switchTab("output");
   await populateSessions();
 }
 
 $("session-select").addEventListener("change", (e) => switchSession(e.target.value));
-populateSessions();
+
+// ---- data settings: consent flag + local dataset stats (collection is always-on, local) ----
+async function refreshDatasetStats() {
+  try {
+    const s = await (await fetch("/api/dataset/stats")).json();
+    $("dataset-count").textContent = `${s.rows} interaction${s.rows === 1 ? "" : "s"} logged locally`;
+  } catch (e) { /* ignore */ }
+}
+async function loadSettings() {
+  try {
+    const s = await (await fetch("/api/settings")).json();
+    $("contribute").checked = !!s.contribute_data;
+  } catch (e) { /* ignore */ }
+}
+$("contribute").addEventListener("change", (e) => {
+  fetch("/api/settings", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contribute_data: e.target.checked }),
+  }).catch(() => {});
+});
+$("settings").addEventListener("toggle", (e) => { if (e.target.open) refreshDatasetStats(); });
+
+// on load: list sessions, repaint the current one, load settings + stats
+(async () => { await populateSessions(); await replaySession(sid); await loadSettings(); await refreshDatasetStats(); })();
 
 // ---- tabs (Output / Activity / Terminal) ----
 let currentTab = "output";

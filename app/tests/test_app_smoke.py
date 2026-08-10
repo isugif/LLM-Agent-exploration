@@ -148,15 +148,54 @@ def test_resolve_session_query_offline():
 
 @pytest.fixture()
 def session_dir(tmp_path, monkeypatch):
-    """Point the session store at a tmp dir so tests never touch ~/.bio_chat."""
+    """Point the session store + dataset at tmp dirs so tests never touch ~/.bio_chat."""
     import importlib
-    monkeypatch.setenv("BIO_CHAT_SESSIONS", str(tmp_path))
+    monkeypatch.setenv("BIO_CHAT_SESSIONS", str(tmp_path / "sessions"))
+    monkeypatch.setenv("BIO_CHAT_DATASET", str(tmp_path / "dataset"))
     import app.session as s
     importlib.reload(s)                      # rebuild STORE against the tmp base_dir
     import app.capabilities.session_query as sq
     import app.api.routes_chat as rc
     importlib.reload(sq); importlib.reload(rc)
     return tmp_path
+
+
+def test_chat_persists_transcript(session_dir, offline):
+    client = TestClient(create_app())
+    r = client.post("/api/chat", json={"message": "which tool takes fastq?", "provider": "auto"})
+    sid = json.loads(_parse_sse(r.text)["meta"])["sid"]
+    tr = client.get(f"/api/sessions/{sid}/transcript").json()["turns"]
+    assert len(tr) == 1 and tr[0]["question"] == "which tool takes fastq?"
+    kinds = {e["event"] for e in tr[0]["events"]}
+    assert {"meta", "panel", "prose", "done"} <= kinds     # enough to repaint chat + tabs
+
+
+def test_interrupted_turn_still_persists(session_dir, offline):
+    """Closing the stream early (client abort) still flushes the turn via the generator's finally."""
+    client = TestClient(create_app())
+    sid = None
+    with client.stream("POST", "/api/chat",
+                       json={"message": "which tool takes fastq?", "provider": "auto"}) as r:
+        for line in r.iter_lines():          # read one meta line to learn the sid, then bail
+            if line.startswith("data:") and '"sid"' in line:
+                sid = json.loads(line[5:].strip())["sid"]
+                break                        # <- abort mid-stream
+    assert sid
+    turns = client.get(f"/api/sessions/{sid}/transcript").json()["turns"]
+    assert len(turns) == 1                   # the partial turn was saved, not lost
+    assert turns[0]["question"] == "which tool takes fastq?"
+
+
+def test_settings_and_dataset_api(session_dir, offline):
+    client = TestClient(create_app())
+    assert client.get("/api/settings").json()["contribute_data"] is False
+    assert client.post("/api/settings", json={"contribute_data": True}).json()["contribute_data"] is True
+    assert client.get("/api/settings").json()["contribute_data"] is True
+    # a chat turn logs at least the (question -> intent) row to the local dataset
+    client.post("/api/chat", json={"message": "which tool takes fastq?", "provider": "auto"})
+    assert client.get("/api/dataset/stats").json()["rows"] >= 1
+    exp = client.get("/api/dataset/export")
+    assert exp.status_code == 200 and '"kind": "intent"' in exp.text
 
 
 def test_session_query_run_then_recall(session_dir):

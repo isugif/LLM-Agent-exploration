@@ -60,9 +60,12 @@ def fill(
         raw = provider.run(prompt, timeout=timeout)
         text = strip_code_fence(raw)
         try:
-            return model.model_validate(json.loads(text))
+            obj = model.model_validate(json.loads(text))
+            _harvest_curate(provider, model, prompt, raw, ok=True)   # a validated curator example
+            return obj
         except (json.JSONDecodeError, ValidationError) as exc:
             last_err = exc
+            _harvest_curate(provider, model, prompt, raw, ok=False, error=str(exc))
             # feed the exact error back so the next attempt is a targeted fix, not a blind re-roll
             prompt = (
                 base_prompt
@@ -71,3 +74,14 @@ def fill(
             )
     raise LLMError(provider.name, f"could not produce valid {model.__name__} after "
                                   f"{max_retries + 1} tries: {last_err}")
+
+
+def _harvest_curate(provider, model, prompt, response, *, ok: bool, error: str = "") -> None:
+    """Log the curator's (prompt -> section JSON) with its validator pass/fail label. Never raises."""
+    try:
+        from shared import dataset
+        dataset.record("curate", model=getattr(provider, "model", provider.name),
+                       system="", prompt=prompt, response=response, ok=ok,
+                       labels={"schema": model.__name__, "valid": ok, **({"error": error} if error else {})})
+    except Exception:  # noqa: BLE001
+        pass
