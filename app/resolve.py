@@ -27,6 +27,8 @@ ALN_RE = re.compile(r"\S+\.(?:bam|sam|cram)(?![A-Za-z0-9])", re.IGNORECASE)     
 GTF_RE = re.compile(r"\S+\.(?:gtf|gff3|gff)(?:\.gz)?(?![A-Za-z0-9])", re.IGNORECASE)  # an annotation
 FLAG_RE = re.compile(r"(?:^|\s)--?[A-Za-z][\w-]*")
 _RUN_RE = re.compile(r"\brun\b", re.IGNORECASE)
+# a "how do I run …" instructions question — asks ABOUT running, so it's explain_tool, not a run
+_HOWTO_RUN_RE = re.compile(r"\bhow\s+(?:to|do\s+i|can\s+i|would\s+i|should\s+i|does\s+one)\b", re.IGNORECASE)
 _ADD_RE = re.compile(r"\b(?:install|add(?:\s+the)?(?:\s+tool)?)\s+([A-Za-z0-9][\w.\-]+)", re.IGNORECASE)
 # a tool-less "which/what/recommend … tool/program" discovery question -> find_tool (cross-tool RAG)
 _FIND_RE = re.compile(
@@ -226,10 +228,12 @@ def resolve(intent, message: str, history: Optional[list[dict]],
     if intent.intent == "other":
         if fq and _RUN_RE.search(message):
             intent.intent = "run_pipeline"; notes.append("intent=run_pipeline (FASTQ + 'run')")
-        elif _RUN_RE.search(message) and named and aln_in(message):
-            # "run rustqc on x.bam" — a BAM-input tool named + an alignment path + 'run'
+        elif _RUN_RE.search(message) and named and not _HOWTO_RUN_RE.search(message):
+            # "run multiqc", "run rustqc on x.bam" — an explicit run verb + a documented tool. No
+            # file is needed to route: an aggregator defaults to the session dir; a file-input tool
+            # gets a 'which file?' from the missing-slot check. ("how do I run X" stays explain.)
             intent.intent = "run_pipeline"; intent.tool = named
-            notes.append(f"intent=run_pipeline tool={named} (alignment + 'run')")
+            notes.append(f"intent=run_pipeline tool={named} ('run' + documented tool)")
         elif fq:
             intent.intent = "describe_data"; notes.append("intent=describe_data (FASTQ present)")
         elif add_tool_name(message):
