@@ -59,6 +59,12 @@ def test_resolve_offline_routing():
     assert ground("install seqkit").intent == "add_tool"
     assert ground("install seqkit").tool == "seqkit"
     assert ground("add the tool star").tool == "star"
+    # "run <tool>" with no file still routes to run_pipeline (aggregators need none; file-input
+    # tools then get a 'which file?'), but "how do I run X" stays explain_tool.
+    assert ground("can you run multiqc").intent == "run_pipeline"
+    assert ground("can you run multiqc").tool == "multiqc"
+    assert ground("run fastqc").intent == "run_pipeline"
+    assert ground("how do I run multiqc?").intent == "explain_tool"
 
 
 def test_add_tool_event_mapping():
