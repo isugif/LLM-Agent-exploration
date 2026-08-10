@@ -1,0 +1,30 @@
+# Expected-range table for read-to-reference alignment — the "is this reasonable?" data structure
+# for the results-evaluation harness. Scored against parsed minimap2 metrics (shared/parsers/
+# minimap2_parse.py). Ranges are deliberately LENIENT and context-noted: a low mapping rate to a
+# small viral genome usually means host/other contamination, not a tool failure.
+#
+# Comparators: gte, lte, gt, lt, between:[lo,hi]. The evaluator picks the worst tier a value falls in.
+
+context:
+  task: alignment
+  reference_scope: general
+
+metrics:
+  percent_mapped:
+    description: "Percent of primary reads that aligned to the reference."
+    unit: percent
+    ok:   { gte: 70 }
+    warn: { between: [5, 70] }
+    fail: { lt: 5 }
+    note: >
+      Mapping rate is reference-dependent. For a small viral genome a low rate is common and often
+      reflects host or environmental reads, not a failure — check what fraction is expected to be
+      viral before treating a low value as a problem.
+
+  mean_mapq:
+    description: "Mean mapping quality (MAPQ) of mapped primary reads."
+    unit: phred
+    ok:   { gte: 20 }
+    warn: { between: [5, 20] }
+    fail: { lt: 5 }
+    note: "Low mean MAPQ suggests multi-mapping / low-complexity or a poorly matched reference."

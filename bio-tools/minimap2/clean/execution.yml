@@ -1,0 +1,5 @@
+# CLEAN machine section. Validates against schemas.py:ExecutionSection. Drives shared/execution/runner.py.
+# {reference} is the genome FASTA (second input); {input} is the reads. `-ax sr` = short-read preset.
+argv: [minimap2, -ax, sr, -o, "{out_dir}/aln.sam", "{reference}", "{input}"]
+version_argv: [minimap2, --version]
+install_hint: "mamba install -c bioconda minimap2"

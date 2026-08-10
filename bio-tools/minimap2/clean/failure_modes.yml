@@ -1,0 +1,10 @@
+# CLEAN machine section (list). Each item validates against schemas.py:FailureMode.
+- id: reference_unreadable
+  signal: "failed to open"
+  fix: "minimap2 could not open the reference or reads file. Confirm both paths exist, are readable, and the reference is FASTA."
+- id: empty_reference
+  signal: "no sequence"
+  fix: "The reference FASTA has no sequences. Re-fetch it (e.g. bash shared/data/fetch_reference.sh)."
+- id: bad_preset
+  signal: "unknown preset"
+  fix: "The -ax preset is invalid for this minimap2 version. Use a supported preset (sr for short reads, map-ont/map-pb for long reads)."

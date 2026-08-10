@@ -16,5 +16,5 @@ from shared.execution.runner import run_tool
 def execution_node(state: dict) -> dict:
     out_dir = state.get("out_dir") or tempfile.mkdtemp(prefix=f"{state['tool']}_")
     contract = cl.load_contract(state["tool"])
-    result = run_tool(contract, state["fastq"], out_dir)
+    result = run_tool(contract, state["fastq"], out_dir, reference=state.get("reference"))
     return {"run_result": result.to_dict(), "out_dir": out_dir}

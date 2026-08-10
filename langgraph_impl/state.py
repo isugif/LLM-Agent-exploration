@@ -14,6 +14,7 @@ class PipelineState(TypedDict, total=False):
     # inputs
     tool: str                          # which tool's contract to route against (e.g. "fastqc")
     fastq: str                         # input path (a FASTQ file, or a report dir for aggregators)
+    reference: str                     # optional second input: a genome FASTA (aligners)
     question: str
     deliverable: str
     out_dir: str

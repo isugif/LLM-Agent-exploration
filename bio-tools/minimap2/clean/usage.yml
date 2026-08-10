@@ -1,0 +1,7 @@
+# CLEAN context section. Validates against schemas.py:UsageSection.
+examples:
+  - description: "align short (Illumina) reads to a reference, SAM output"
+    command: "minimap2 -ax sr -o aln.sam reference.fasta reads.fastq.gz"
+  - description: "align Nanopore long reads"
+    command: "minimap2 -ax map-ont -o aln.sam reference.fasta reads.fastq.gz"
+note: "Pick the preset by read type: sr (short/Illumina), map-ont (Nanopore), map-pb (PacBio)."

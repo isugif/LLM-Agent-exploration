@@ -21,6 +21,8 @@ import re
 from typing import Optional
 
 FASTQ_RE = re.compile(r"\S+\.(?:fastq|fq)(?:\.gz)?", re.IGNORECASE)
+# a reference FASTA path; the negative lookahead stops '.fa' from matching inside '.fastq'
+FASTA_RE = re.compile(r"\S+\.(?:fasta|fna|fa)(?:\.gz)?(?![A-Za-z0-9])", re.IGNORECASE)
 FLAG_RE = re.compile(r"(?:^|\s)--?[A-Za-z][\w-]*")
 _RUN_RE = re.compile(r"\brun\b", re.IGNORECASE)
 _ADD_RE = re.compile(r"\b(?:install|add(?:\s+the)?(?:\s+tool)?)\s+([A-Za-z0-9][\w.\-]+)", re.IGNORECASE)
@@ -71,6 +73,12 @@ def tool_in(text: str) -> Optional[str]:
 
 def fastq_in(text: str) -> Optional[str]:
     m = FASTQ_RE.findall(text or "")
+    return m[0] if m else None
+
+
+def fasta_ref_in(text: str) -> Optional[str]:
+    """A reference-genome FASTA path mentioned in the message (for aligners)."""
+    m = FASTA_RE.findall(text or "")
     return m[0] if m else None
 
 

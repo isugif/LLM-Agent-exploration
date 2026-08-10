@@ -49,9 +49,15 @@ def _tool_version(version_argv: list[str] | None) -> str | None:
         return "unknown"
 
 
-def run_tool(contract: dict, input_path: str, out_dir: str,
-             threads: int = 1, timeout: int = 600) -> RunResult:
-    """Run the tool described by `contract` on `input_path` into `out_dir`."""
+def run_tool(contract: dict, input_path: str, out_dir: str, *,
+             reference: str | None = None, threads: int = 1, timeout: int = 600) -> RunResult:
+    """Run the tool described by `contract` on `input_path` into `out_dir`.
+
+    `reference` fills the `{reference}` placeholder for tools that take a second input (e.g. an
+    aligner's genome FASTA). Single-input tools ignore it. A tool whose argv needs `{reference}` but
+    got none fails cleanly (an unfilled placeholder is caught before launch), so the judgment
+    harness's reference-required precondition is the real gate — this is only a backstop.
+    """
     tool_id = contract["id"]
     ex = contract.get("execution", {})
     argv_template = ex.get("argv")
@@ -61,6 +67,7 @@ def run_tool(contract: dict, input_path: str, out_dir: str,
         "tool": tool_id,
         "tool_version": _tool_version(ex.get("version_argv")),
         "input": str(input_path),
+        "reference": str(reference) if reference else None,
         "out_dir": str(out_dir),
     }
 
@@ -76,7 +83,14 @@ def run_tool(contract: dict, input_path: str, out_dir: str,
                          error=f"{argv_template[0]} not found on PATH. Install: {install_hint}")
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    argv = _render(argv_template, {"input": input_path, "out_dir": out_dir, "threads": threads})
+    subs = {"input": input_path, "out_dir": out_dir, "threads": threads}
+    if reference:
+        subs["reference"] = reference
+    argv = _render(argv_template, subs)
+    if any("{reference}" in tok for tok in argv):     # argv needs a reference but none was supplied
+        return RunResult(tool=tool_id, ok=False, exit_code=None, stdout="", stderr="",
+                         output_dir=None, audit=audit,
+                         error=f"{tool_id} requires a reference genome (FASTA); none was provided")
     argv[0] = exe                       # use the resolved absolute path
     audit["cmd"] = " ".join(argv)
 

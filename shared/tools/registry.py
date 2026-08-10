@@ -19,6 +19,7 @@ from typing import Callable
 
 from shared.parsers.fastqc_parse import parse_fastqc
 from shared.parsers.multiqc_parse import parse_multiqc
+from shared.parsers.minimap2_parse import parse_minimap2
 from shared.probes.fastq_probe import probe as probe_fastq
 from shared.probes.report_dir_probe import probe_report_dir
 
@@ -28,10 +29,11 @@ Fn = Callable[[str], dict]
 PARSERS: dict[str, Fn] = {
     "fastqc": parse_fastqc,
     "multiqc": parse_multiqc,
+    "minimap2": parse_minimap2,
 }
 
 # Input probe: input_path -> measured facts. Keyed by input TYPE, shared across tools that take
-# the same input. fastqc takes a FASTQ; multiqc takes a directory of reports.
+# the same input. fastqc/minimap2 take a FASTQ (default probe); multiqc takes a directory of reports.
 PROBES: dict[str, Fn] = {
     "fastqc": probe_fastq,
     "multiqc": probe_report_dir,

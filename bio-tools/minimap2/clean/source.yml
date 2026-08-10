@@ -1,0 +1,4 @@
+# CLEAN context section. Validates against schemas.py:SourceSection.
+homepage: "https://lh3.github.io/minimap2/"
+repository: "https://github.com/lh3/minimap2"
+docs: "https://lh3.github.io/minimap2/minimap2.html"

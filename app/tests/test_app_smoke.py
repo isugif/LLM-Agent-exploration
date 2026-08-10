@@ -170,6 +170,28 @@ def test_chat_persists_transcript(session_dir, offline):
     assert {"meta", "panel", "prose", "done"} <= kinds     # enough to repaint chat + tabs
 
 
+def test_run_pipeline_tool_name_resolution(session_dir, offline, monkeypatch):
+    """A user-typed tool name is resolved (minimap->minimap2) or handled gracefully (bwa),
+    never crashing on a missing manifest — the bug from the 'using minimap' session."""
+    import app.api.routes_chat as rc
+    from app.intent import Intent
+
+    def fake_classify(tool):
+        def _c(message, provider, history=None):
+            return Intent(intent="run_pipeline", tool=tool, files=["shared/data/x.fastq.gz"])
+        return _c
+
+    client = TestClient(create_app())
+    # 'minimap' -> documented aligner minimap2 -> reaches the reference-ask (proves resolution)
+    monkeypatch.setattr(rc, "classify", fake_classify("minimap"))
+    prose = json.loads(_parse_sse(client.post("/api/chat", json={"message": "run minimap on the reads"}).text)["prose"])["text"]
+    assert "reference" in prose.lower()
+    # 'bwa' is undocumented -> a clear message, not a FileNotFoundError
+    monkeypatch.setattr(rc, "classify", fake_classify("bwa"))
+    prose2 = json.loads(_parse_sse(client.post("/api/chat", json={"message": "run bwa on the reads"}).text)["prose"])["text"]
+    assert "don't have a documented tool" in prose2 and "bwa" in prose2
+
+
 def test_interrupted_turn_still_persists(session_dir, offline):
     """Closing the stream early (client abort) still flushes the turn via the generator's finally."""
     client = TestClient(create_app())

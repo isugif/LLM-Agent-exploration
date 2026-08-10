@@ -1,0 +1,11 @@
+# CLEAN LLM-readable source (fact-only). Validates against shared/sections/schemas.py:InputSection.
+formats:
+  - format: fastq
+    compression: [gzip, none]
+    layouts: [SE, PE]
+    note: "the reads to align ({input}); FASTA reads are also accepted"
+  - format: fasta
+    compression: [gzip, none]
+    layouts: []
+    note: "the reference genome/transcriptome ({reference}); indexed in-memory for small genomes"
+note: "Two inputs: sequencing reads (FASTQ) plus a reference FASTA. No prebuilt index is required for small genomes."

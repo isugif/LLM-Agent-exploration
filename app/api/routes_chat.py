@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -21,9 +22,46 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from shared.llm.provider import get_provider
-from shared import dataset
+from shared import catalog, dataset
 from app import resolve
 from app.session import STORE
+
+
+def _is_aligner(tool: str) -> bool:
+    """True if the tool's catalog purpose is read alignment (needs a reference genome)."""
+    try:
+        rec = next((r for r in catalog.catalog() if r["tool"] == tool), None)
+        return bool(rec and "Read_Alignment_and_Mapping" in rec.get("category_tags", []))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _resolve_tool_name(name: str) -> str | None:
+    """Map a user-typed tool name to a DOCUMENTED tool: exact (case-insensitive), else a unique
+    prefix/substring match (e.g. 'minimap' -> 'minimap2'). None if nothing matches — so an unknown
+    tool is handled gracefully instead of crashing on a missing manifest."""
+    docs = catalog.available_tools()
+    low = (name or "").lower()
+    if not low:
+        return None
+    for t in docs:
+        if t.lower() == low:
+            return t
+    hits = [t for t in docs if t.lower().startswith(low) or low in t.lower()]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _existing_path(p: str | None) -> str | None:
+    """Return the path as given if it exists; tolerate a leading-slash typo for a repo-relative
+    path (e.g. '/shared/data/x' -> 'shared/data/x'). Otherwise return it unchanged (downstream
+    reports a clear open error)."""
+    if not p:
+        return p
+    if os.path.exists(p):
+        return p
+    if p.startswith("/") and os.path.exists(p.lstrip("/")):
+        return p.lstrip("/")
+    return p
 from app.intent import classify, stub_text
 from app.capabilities import describe_data, run_pipeline, add_tool, explain_tool, find_tool, session_query
 
@@ -92,7 +130,7 @@ def make_chat_router() -> APIRouter:
                 yield rec("done", "{}")
                 return
 
-            file = intent.files[0] if intent.files else None
+            file = _existing_path(intent.files[0]) if intent.files else None
 
             if intent.intent == "describe_data":
                 yield rec("log", json.dumps({"text": f"Profiling {file}…"}))
@@ -102,7 +140,25 @@ def make_chat_router() -> APIRouter:
                 yield rec("prose", json.dumps({"text": result.get("prose", "")}))
 
             elif intent.intent == "run_pipeline":
-                tool = intent.tool if intent.tool and intent.tool != "unknown" else "fastqc"
+                named = intent.tool if intent.tool and intent.tool != "unknown" else "fastqc"
+                tool = _resolve_tool_name(named)
+                if tool is None:              # unknown/undocumented tool -> don't crash; guide instead
+                    docs = ", ".join(catalog.available_tools()) or "(none yet)"
+                    yield rec("prose", json.dumps({"text":
+                        f"I don't have a documented tool called **{named}**. Documented tools: {docs}. "
+                        f"You can add one with \"install {named}\"."}))
+                    yield rec("done", "{}")
+                    return
+                if tool != named:
+                    yield rec("log", json.dumps({"text": f"resolved '{named}' → {tool}"}))
+                reference = _existing_path(resolve.fasta_ref_in(req.message))
+                # onboarding request: an aligner with no reference asks for one instead of defaulting
+                if _is_aligner(tool) and not reference:
+                    yield rec("prose", json.dumps({"text":
+                        f"**{tool}** aligns reads to a reference genome — which reference should I use? "
+                        "Give me a FASTA path (e.g. `shared/data/NC_045512.2.fasta`)."}))
+                    yield rec("done", "{}")
+                    return
                 yield rec("log", json.dumps({"text": f"Running {tool} on {file}…"}))
                 yield rec("plan", json.dumps({"steps": run_pipeline.PLAN}))
                 out_dir = str(STORE.run_dir(sid, tool))   # durable, under the session dir
@@ -111,7 +167,7 @@ def make_chat_router() -> APIRouter:
                 findings: list = []
                 async for kind, payload in _abridge(
                         lambda: run_pipeline.stage_events(req.message, tool, file,
-                                                          req.provider or "auto", out_dir)):
+                                                          req.provider or "auto", out_dir, reference)):
                     if kind == "error":
                         yield rec("stage", json.dumps({"stage": "error", "title": "Error", "error": payload}))
                         continue

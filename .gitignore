@@ -11,9 +11,14 @@ __pycache__/
 # curator demo outputs (the curator code IS tracked; its run artifacts are not)
 curator/out/
 
-# test data (regenerate with shared/data/fetch_virus_fastq.sh)
+# test data (regenerate with shared/data/fetch_virus_fastq.sh / fetch_reference.sh)
 shared/data/*.fastq.gz
 shared/data/*.fastq
+shared/data/*.fasta
+shared/data/*.fasta.gz
+shared/data/*.fa
+shared/data/*.fai
+shared/data/*.mmi
 
 # tool outputs (committed test fixtures under tests/inputs/ are NOT matched by these)
 *_fastqc.zip

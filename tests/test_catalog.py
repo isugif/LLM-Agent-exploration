@@ -69,7 +69,7 @@ def test_find_by_input_format():
 def test_find_by_category():
     catalog.invalidate()
     aln = {r["tool"] for r in catalog.find(category="Read_Alignment_and_Mapping")}
-    assert aln == {"hisat2", "star"}
+    assert {"hisat2", "star", "minimap2"} <= aln       # documented aligners (minimap2 is runnable)
     assert catalog.find(category="Methylation") == []   # nothing documented there yet
 
 

@@ -46,7 +46,11 @@ TRAITS_ROOT = Path(__file__).parent / "traits"
 # --------------------------------------------------------------------------- #
 
 def load_manifest(tool_id: str) -> dict[str, Any]:
-    with open(TOOLS_ROOT / tool_id / "manifest.yml") as fh:
+    path = TOOLS_ROOT / tool_id / "manifest.yml"
+    if not path.exists():
+        known = sorted(p.name for p in TOOLS_ROOT.iterdir() if (p / "manifest.yml").exists())
+        raise KeyError(f"unknown tool '{tool_id}' (no {path}). Known tools: {known}")
+    with open(path) as fh:
         return yaml.safe_load(fh)
 
 

@@ -1,0 +1,7 @@
+# CLEAN machine section (fact-only). Validates against schemas.py:MetaSection. Assembled into the contract.
+summary: >
+  Fast general-purpose read-to-reference aligner. Maps sequencing reads (short or long) against a
+  reference genome/transcriptome FASTA and writes SAM alignments. For short Illumina reads use the
+  `sr` preset. It aligns; it does not call variants, assemble, or quantify expression.
+expectations_ref: alignment_qc.yaml
+category_tags: [Read_Alignment_and_Mapping]
