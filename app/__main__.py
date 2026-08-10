@@ -20,12 +20,18 @@ def main() -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--model", default=None, help="default Ollama model (sets OLLAMA_MODEL)")
+    ap.add_argument("--workdir", default=os.environ.get("BIO_CHAT_WORKDIR") or os.getcwd(),
+                    help="folder to resolve data paths against (default: $BIO_CHAT_WORKDIR / CWD)")
     args = ap.parse_args()
 
     if args.model:
         os.environ["OLLAMA_MODEL"] = args.model
 
+    from app import workdir
+    ok, msg = workdir.set_workdir(args.workdir)
+
     print(f"Bio Chat on http://{args.host}:{args.port}  (Ctrl-C to stop)")
+    print(f"Working directory: {workdir.get_workdir()}" + ("" if ok else f"  (! {msg})"))
     uvicorn.run(create_app(), host=args.host, port=args.port)
 
 

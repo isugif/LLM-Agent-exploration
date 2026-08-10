@@ -26,7 +26,7 @@ from nooa_impl.agents.evaluation import EvaluationAgent
 
 async def run_pipeline(fastq: str, question: str, deliverable: str | None = None,
                        out_dir: str | None = None, tool_id: str = "fastqc",
-                       reference: str | None = None) -> dict:
+                       reference: str | None = None, annotation: str | None = None) -> dict:
     deliverable = deliverable or question
     llm, have_llm, provider_name = build_llm()
 
@@ -43,6 +43,7 @@ async def run_pipeline(fastq: str, question: str, deliverable: str | None = None
     # --- 1. Onboarding -------------------------------------------------------
     measured = onboard.probe_file(fastq, tool_id)
     measured["has_reference"] = bool(reference)    # input fact for the aligner reference-required gate
+    measured["has_annotation"] = bool(annotation)  # input fact for the rustqc gtf-required gate
     declared: dict = {}
     if have_llm:
         declared = (await onboard.parse_question(question)).model_dump()
@@ -79,7 +80,8 @@ async def run_pipeline(fastq: str, question: str, deliverable: str | None = None
     # --- 3. Execution --------------------------------------------------------
     out_dir = out_dir or tempfile.mkdtemp(prefix=f"{tool_id}_")
     report["out_dir"] = out_dir
-    run_result = run_tool(cl.load_contract(tool_id), fastq, out_dir, reference=reference)
+    run_result = run_tool(cl.load_contract(tool_id), fastq, out_dir,
+                          inputs={"reference": reference, "annotation": annotation})
     report["run_result"] = {k: v for k, v in run_result.to_dict().items()
                             if k not in ("stdout", "stderr")}
 

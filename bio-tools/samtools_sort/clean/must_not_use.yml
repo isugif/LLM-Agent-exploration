@@ -1,0 +1,6 @@
+# CLEAN machine section (list). Validates against schemas.py:Boundary. HUMAN-REVIEWED.
+- id: sorts_not_filters
+  boundary: >
+    samtools sort only reorders records by coordinate; it does not remove duplicates, filter by
+    quality, or subset reads. Do not treat a sort as a cleaning/dedup step.
+  keywords: [deduplicate, remove duplicates, filter reads, mark duplicates, clean, dedup]

@@ -1,0 +1,6 @@
+# CLEAN machine section (list). Validates against schemas.py:Boundary. HUMAN-REVIEWED.
+- id: marks_not_removes
+  boundary: >
+    This contract MARKS duplicates (sets the flag), it does not remove them — downstream QC (rustqc,
+    dupRadar) needs marked-but-present duplicates. Do not treat the output as a deduplicated file.
+  keywords: [remove duplicates, delete duplicates, dedup, drop duplicates, -r remove]

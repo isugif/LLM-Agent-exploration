@@ -1,0 +1,19 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Precondition. HUMAN-REVIEWED.
+# These are the prerequisite CATCHES — rustqc needs a coordinate-sorted, duplicate-marked alignment
+# plus a GTF. Each refuses BEFORE compute with the exact fix.
+- id: input_is_alignment
+  assert: "measured.format in ['bam', 'sam', 'cram']"
+  severity: block
+  message: "rustqc QCs an alignment; the input is not a BAM/SAM/CRAM. Align your reads first (e.g. minimap2)."
+- id: coordinate_sorted
+  assert: "measured.sorted == True"
+  severity: block
+  message: "rustqc needs a coordinate-sorted alignment. Sort it first: samtools sort -o sorted.bam in.bam"
+- id: duplicate_marked
+  assert: "measured.dup_marked == True"
+  severity: block
+  message: "rustqc needs duplicate-MARKED reads (not removed). Mark them: samtools markdup sorted.bam markdup.bam"
+- id: annotation_provided
+  assert: "measured.has_annotation == True"
+  severity: block
+  message: "rustqc needs a GTF gene annotation. Provide one (--gtf on the CLI, or a .gtf path in chat)."

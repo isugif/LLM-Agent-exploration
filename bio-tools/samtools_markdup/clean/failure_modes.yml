@@ -1,0 +1,10 @@
+# CLEAN machine section (list). Validates against schemas.py:FailureMode. HUMAN-REVIEWED.
+- id: no_mc_tag
+  signal: "no MC tag"
+  fix: "Paired-end markdup needs mate tags. Run `samtools sort -n | samtools fixmate -m | samtools sort` before markdup (single-end needs no fixmate)."
+- id: not_sorted
+  signal: "not sorted"
+  fix: "markdup needs a coordinate-sorted input. Run samtools sort -o sorted.bam in.bam first."
+- id: unreadable_input
+  signal: "fail to open"
+  fix: "samtools could not open the input. Confirm the path exists and is a valid, sorted BAM."

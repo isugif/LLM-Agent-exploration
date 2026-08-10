@@ -1,0 +1,9 @@
+# CLEAN machine section (fact-only). Validates against schemas.py:MetaSection. HUMAN-REVIEWED.
+summary: >
+  Single-pass RNA-seq quality control on aligned reads (BAM/SAM/CRAM): featureCounts assignment,
+  dupRadar duplication, RSeQC metrics, preseq complexity, and samtools/Qualimap stats — reimplemented
+  in Rust. It QCs an existing alignment against a gene annotation; it does not align, quantify for
+  differential expression, or call variants. Input must be coordinate-sorted and duplicate-marked,
+  and a GTF annotation is required.
+expectations_ref: rnaseq_qc_aln.yaml
+category_tags: [RNA_Analysis, Sequence_Data_Processing_and_Quality_Control]

@@ -1,0 +1,5 @@
+# CLEAN machine section. Validates against schemas.py:ExecutionSection. HUMAN-REVIEWED.
+# -s prints duplicate stats to stderr; input must be coordinate-sorted.
+argv: [samtools, markdup, -s, "{input}", "{out_dir}/markdup.bam"]
+version_argv: [samtools, --version]
+install_hint: "mamba install -c bioconda samtools"

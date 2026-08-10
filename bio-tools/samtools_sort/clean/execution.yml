@@ -1,0 +1,4 @@
+# CLEAN machine section. Validates against schemas.py:ExecutionSection. HUMAN-REVIEWED.
+argv: [samtools, sort, -o, "{out_dir}/sorted.bam", "{input}"]
+version_argv: [samtools, --version]
+install_hint: "mamba install -c bioconda samtools"

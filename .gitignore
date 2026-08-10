@@ -19,6 +19,10 @@ shared/data/*.fasta.gz
 shared/data/*.fa
 shared/data/*.fai
 shared/data/*.mmi
+shared/data/*.gtf
+shared/data/*.gtf.gz
+shared/data/*.gff
+shared/data/*.gff3
 
 # tool outputs (committed test fixtures under tests/inputs/ are NOT matched by these)
 *_fastqc.zip

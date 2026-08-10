@@ -37,6 +37,10 @@ body {
   padding: 12px 16px; border-bottom: 1px solid var(--line);
 }
 .chat-head h1 { font-size: 16px; margin: 0; letter-spacing: .2px; }
+.workdir {
+  color: var(--muted); font-size: 11px; margin-right: auto; padding-left: 10px;
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .prov { color: var(--muted); font-size: 12px; }
 .prov select {
   margin-left: 6px; background: var(--card); color: var(--ink);

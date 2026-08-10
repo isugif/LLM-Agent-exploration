@@ -1,0 +1,7 @@
+# CLEAN machine section. Validates against schemas.py:MetaSection. HUMAN-REVIEWED.
+summary: >
+  Coordinate-sort a SAM/BAM/CRAM alignment into a sorted BAM. A preparation transform — the sorted
+  BAM feeds duplicate marking (samtools markdup) and downstream QC (rustqc). It reorders records; it
+  does not filter, deduplicate, or alter read content.
+expectations_ref: null
+category_tags: [Sequence_Data_Processing_and_Quality_Control]

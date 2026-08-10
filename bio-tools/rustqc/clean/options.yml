@@ -1,0 +1,8 @@
+# CLEAN context section (curator-generated). Validates against schemas.py.
+options:
+- flag: -h / --help
+  description: Print help
+  default: null
+- flag: -V / --version
+  description: Print version
+  default: null
