@@ -15,7 +15,7 @@ Right to refuse: if output can't be parsed, emit status 'cannot_assess' rather t
 from __future__ import annotations
 
 from shared import contracts_lib as cl
-from shared.tools.registry import get_parser
+from shared.tools.registry import parse_output
 from shared.harness_steps import evaluation_verdict, score_metrics
 from shared.llm.provider import provider_by_name, NullProvider
 
@@ -24,7 +24,7 @@ def evaluation_node(state: dict) -> dict:
     tool_id = state["tool"]
     contract = cl.load_contract(tool_id)
     expectations = cl.load_expectations(contract)
-    metrics = get_parser(tool_id)(state["run_result"]["output_dir"])
+    metrics = parse_output(tool_id, state["run_result"]["output_dir"])
 
     scored, findings = score_metrics(expectations, metrics)
 

@@ -1,7 +1,9 @@
-# ┌─ HUMAN REVIEW REQUIRED (HRR) ──────────────────────────────────────────────┐
-# │ Auto-scaffolded machine section — NOT trustworthy yet. Replace every HRR_   │
-# │ placeholder with expert-reviewed content and delete the markers. Until then │
-# │ the harness REFUSES to route this tool.                                     │
-# └────────────────────────────────────────────────────────────────────────────┘
-summary: HRR_one-paragraph description of what the tool does and its primary use
-expectations_ref: null
+# CLEAN machine section (fact-only). Validates against schemas.py:MetaSection. HUMAN-REVIEWED.
+summary: >
+  Ultrafast cross-platform toolkit for FASTA/FASTQ manipulation — a `seqkit <command>` suite
+  (stats, seq, grep, subseq, sort, rmdup, sample, split, fx2tab, ...). This contract routes the
+  read-only `stats` command, which reports per-file summary statistics (sequence count, total /
+  min / avg / max length, N50, GC%, and Q20/Q30 for FASTQ). It summarizes and manipulates
+  sequences; it does not align, assemble, call variants, or judge quality pass/fail.
+expectations_ref: seqkit_stats.yaml
+category_tags: [Sequence_Data_Processing_and_Quality_Control]
