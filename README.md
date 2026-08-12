@@ -1,4 +1,6 @@
-# LLM-Agent-exploration
+# Bio Harness
+
+Safe agentic bioinformatics — an LLM-agent harness that refuses silently-wrong analyses via machine-readable contracts + four checkpoints. MCP server + local models.
 
 Bioinformatics fails **silently**: a pipeline exits zero but returns wrong biology because an
 assumption was violated in the organism, the sequencing technology, or the software. We make those
