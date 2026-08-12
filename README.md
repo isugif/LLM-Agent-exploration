@@ -89,3 +89,7 @@ controls, and per-checkpoint precision/recall on whether each check catches what
 - **Built two ways** (LangGraph + NOOA) on one shared core, for an honest framework comparison —
   [`docs/COMPARISON.md`](docs/COMPARISON.md)
 - **Design notes** (the MCP pivot + the trust-boundary discussion) — [`docs/mcp/PLAN.md`](docs/mcp/PLAN.md)
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
