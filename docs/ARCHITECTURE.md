@@ -84,6 +84,13 @@ step logic (reconcile, build route, diagnose, score) lives once in `shared/harne
 track's node functions / agent methods are thin wrappers over it, so behavioural parity is
 structural rather than policed.
 
+The per-checkpoint *wiring* is now single-sourced too: framework-neutral functions in
+`shared/harnesses/{onboarding,judgment,execution,evaluation,diagnosis}.py` do one checkpoint each
+(dict in, dict out), and the LangGraph nodes delegate to them. `shared/pipeline.py` sequences them
+into an explicit order-guard, so the order `onboard → judge → refuse|run → evaluate|diagnose` is
+enforced by code rather than emergent from graph edges / statement order. This is what the MCP
+server and the agent loop (below) reuse.
+
 | Harness | LangGraph (`langgraph_impl/`) | NOOA (`nooa_impl/`) |
 |---|---|---|
 | Onboarding | `harnesses/onboarding.py` node fn | `agents/onboarding.py` `OnboardingAgent` |
@@ -121,6 +128,55 @@ deterministic code — the LLM routes and narrates, it never produces the facts.
 - **session_query** — recall this session's past runs (where the output went, what the verdict was),
   backed by a disk-persisted run-log (`app/session.py`, under `~/.bio_chat/sessions/`). A run's HTML
   report (FastQC/MultiQC) renders in an in-app **Report** tab.
+
+## The MCP re-exposure + agent loop (the model-driven surface)
+
+The hand-built intent router (`app/intent.py` + `app/resolve.py`) re-implements what a capable agent
+does natively — intent, slot-filling, follow-ups, clarification, memory. It is being replaced by
+letting the model *drive the harness as tools*. Two commitments keep that safe rather than a bypass:
+
+- **One execution gate, made explicit.** `shared/pipeline.py` is the sole path that runs a tool
+  (`onboard → judge → refuse | run → evaluate | diagnose`). It refuses before compute exactly as
+  judgment does.
+- **The trust boundary is the tool surface.** The model may chat, inspect/query the input folder and
+  run outputs, and *request* tools — but the ONLY tool that executes anything is `run_tool`, which
+  self-guards via `shared/pipeline`. No shell / arbitrary-code / write-outside-harness primitive is
+  ever exposed to the model.
+
+Two client surfaces sit over the same `shared/` core:
+
+- **Web UI agent mode** — `app/agent_loop.py`, behind the `agent` flag on `POST /api/chat`. A
+  provider-driven tool-use loop over `provider.extract(AgentAction, …)` (model-agnostic: Ollama or
+  the Claude CLI, no native tool-calling API required). Tools: read-only `list_workdir` /
+  `list_outputs` / `read_file` / `probe_data`, contract knowledge (`list_catalog` / `explain_tool` /
+  `find_tool`), and the `run_tool` gate. `run_tool` is idempotent per turn and a repeat guard stops
+  runaway loops. The legacy intent/resolve path stays the default until agent mode is proven.
+- **Stdio MCP server** — `mcp_server/server.py` (`mcp[cli]==2.0.0`). Exposes the same harness as MCP
+  tools so an external client (Claude Desktop/Code, or a local-model agent) supplies the
+  intelligence, with the same self-guarding `run_tool`.
+
+```
+        Web UI (agent mode)                      MCP client (Claude Desktop/Code)
+   POST /api/chat {agent:true}                          stdio (MCP)
+                │                                             │
+                ▼                                             ▼
+     app/agent_loop.run_agent                   mcp_server/server.py  (9 tools)
+     (provider.extract loop;                    probe · catalog · explain · find ·
+      list_workdir/list_outputs/                 onboard · judge · run_tool ·
+      read_file/probe/catalog/…)                 evaluate · diagnose
+                │                                             │
+   ═════════════│═══════════ TRUST BOUNDARY ═════════════════│═════════════
+     model may request tools; ONLY run_tool executes; no shell exposed
+                └────────────────────┬────────────────────────┘
+                                     ▼
+                     shared/pipeline.py  (order-guard)
+             onboard → judge → REFUSE | run → evaluate | diagnose
+                                     ▼
+        shared/harnesses/*  →  harness_steps · contracts_lib ·
+        execution/runner (subprocess, shell=FALSE) · probes · catalog
+```
+
+Design notes + the trust-boundary discussion that produced this: [`docs/mcp/`](mcp/).
 
 ## Not yet built (future milestones)
 

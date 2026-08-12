@@ -50,12 +50,16 @@ shared/            framework-agnostic knowledge + execution (BOTH tracks import 
   tools/registry.py  tool_id -> parser + input probe
   llm/             pluggable Ollama/Claude provider (LangGraph track)
   data/            fetch_virus_fastq.sh — small SARS-CoV-2 test dataset
-langgraph_impl/    LangGraph track: StateGraph + node functions   (+ CHANGELOG.md)
+  harnesses/       framework-neutral step fns (onboarding/judgment/execution/evaluation/diagnosis)
+  pipeline.py      the order-guard: onboard -> judge -> refuse|run -> evaluate|diagnose (single source)
+langgraph_impl/    LangGraph track: StateGraph + node fns (now thin adapters over shared/harnesses)
 nooa_impl/         NOOA track: Agent classes + plain orchestrator  (+ CHANGELOG.md)
 curator/           LLM-driven curator: installs a tool + writes its clean sections (see docs/CURATOR.md)
-app/               chat web app (FastAPI + JS UI) over the shared core
+mcp_server/        stdio MCP server exposing the harness as tools (self-guarding run_tool)
+app/               chat web app (FastAPI + JS UI) over the shared core; agent_loop.py = agent mode
 tests/             fixtures per failure mode + run_tests.py -> REPORT.md
 docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md, TRAITS.md, PRINCIPLES.md, GLOSSARY.md
+docs/mcp/          design notes for the MCP pivot + the chat-engine trust-boundary discussion
 shared/traits/     reusable constraints/knowledge (three pillars): runtime/ biology/ domain/
 ```
 
@@ -159,6 +163,29 @@ Wired intents:
 
 The LLM only classifies and narrates; deterministic code produces every fact, so the app degrades
 gracefully with the model off.
+
+### Agent mode + MCP server
+
+The hand-built intent router is being replaced by letting a capable model **drive the harness as
+tools**. The safety rule is that the model may chat, inspect/query the input folder and run outputs,
+and *request* tools — but the only tool that executes anything is `run_tool`, which self-guards via
+the `onboard → judge → refuse|run → evaluate|diagnose` pipeline. No shell / arbitrary-code path is
+exposed.
+
+- **Agent mode (UI):** tick the **agent** checkbox in the header. Your message drives
+  `app/agent_loop.py` (a model-agnostic `provider.extract` tool-use loop) with `list_workdir`,
+  `list_outputs`, `read_file`, `probe_data`, catalog/explain/find, and the `run_tool` gate — so
+  *"run fastqc on each of the snf2 files"* or *"run rustqc on the output"* works without exact
+  phrasing. The legacy intent path is still the default (agent mode is opt-in while it's proven).
+- **MCP server:** point an external client (Claude Desktop/Code, or a local-model agent) at the same
+  harness over stdio:
+  ```bash
+  pip install -r requirements.txt        # adds mcp[cli]==2.0.0
+  python -m mcp_server.server            # stdio; register with your MCP client
+  ```
+
+Design notes + the trust-boundary discussion: [`docs/mcp/`](docs/mcp/). Full picture:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#the-mcp-re-exposure--agent-loop-the-model-driven-surface).
 
 ## Tests
 

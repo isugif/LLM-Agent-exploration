@@ -6,6 +6,34 @@ changelog so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.4.0] — 2026-08-12
+
+MCP re-exposure + a model-agnostic agent loop. The harness becomes a tool surface a capable client
+drives, with execution kept behind one self-guarding gate. LangGraph↔NOOA parity gate unchanged
+(14 pass / 0 fail, deterministic).
+
+### Changed
+- The LangGraph harness nodes (`langgraph_impl/harnesses/*`) are now **thin adapters** that delegate
+  to new framework-neutral step functions in `shared/harnesses/*`. Behaviour is byte-for-byte
+  preserved (parity gate + full suite green); the graph still owns ordering for this track.
+
+### Added
+- shared: `shared/harnesses/{onboarding,judgment,execution,evaluation,diagnosis}.py` — framework-
+  neutral per-checkpoint functions (dict in, dict out), single-sourced with the LangGraph nodes.
+- shared: `shared/pipeline.py` — an explicit **order-guard** (`onboard → judge → refuse|run →
+  evaluate|diagnose`) so the harness order is enforced by code, not emergent from graph edges. This
+  is what the MCP server and agent loop reuse.
+- `mcp_server/server.py` — stdio MCP server exposing exactly the harness tool surface (probe_data,
+  list_catalog, explain_tool, find_tool, onboard_experiment, judge, run_tool, evaluate_output,
+  diagnose_failure). `run_tool` self-guards via `shared/pipeline`; no raw shell/exec is exposed.
+  Pins `mcp[cli]==2.0.0`.
+- app: `app/agent_loop.py` — a model-agnostic tool-use loop (via `provider.extract`) behind the
+  `agent` flag on `POST /api/chat`. Read-only folder/output inspection (`list_workdir`,
+  `list_outputs`, `read_file`, `probe_data`) + contract knowledge + the `run_tool` gate; idempotent
+  runs and a repeat guard prevent runaway loops. Legacy intent/resolve stays the default.
+- docs: `docs/mcp/` — the MCP-pivot design notes + chat-engine trust-boundary discussion.
+- tests: `tests/test_pipeline.py`, `tests/test_mcp_server.py`, `tests/test_agent_loop.py`.
+
 ## [0.3.0] — 2026-08-07
 
 Shared-layer change (YAML structure); no track-specific code changed — the assembled contract keeps

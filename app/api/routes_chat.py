@@ -70,6 +70,7 @@ def _existing_path(p: str | None) -> str | None:
     folder the app was launched in, or one set from chat — with a shared/data fallback for demos."""
     return workdir.resolve_path(p)
 from app import workdir
+from app import agent_loop
 from app.intent import classify, stub_text
 from app.capabilities import (describe_data, run_pipeline, add_tool, explain_tool, find_tool,
                               session_query, workdir_cmd)
@@ -81,6 +82,8 @@ class ChatRequest(BaseModel):
     file: str | None = None                # optional explicit file path from the UI
     history: list[dict] = []               # prior turns [{role, content}] for context (memory)
     session_id: str | None = None          # persistent session id (UI localStorage); validated server-side
+    agent: bool = False                    # Phase B: drive via the tool-use loop (app/agent_loop.py)
+                                           # instead of the legacy intent/resolve brain
 
 
 def _sse(event: str, data: str) -> str:
@@ -118,6 +121,18 @@ def make_chat_router() -> APIRouter:
         sid = STORE.ensure(req.session_id)          # validated/minted; echoed back so the UI persists it
 
         async def _emit(rec):
+            # Phase B: the tool-use loop (model-agnostic; the model requests tools, run_tool
+            # self-guards). Kept behind a flag while the legacy intent/resolve path stays default.
+            if req.agent:
+                async for kind, payload in _abridge(
+                        lambda: agent_loop.run_agent(req.message, req.history, provider, sid)):
+                    if kind == "error":
+                        yield rec("stage", json.dumps({"stage": "error", "title": "Error", "error": payload}))
+                        continue
+                    ev_name, data = payload
+                    yield rec(ev_name, json.dumps(data))
+                return
+
             yield rec("log", json.dumps({"text": f"Classifying request (model: {provider.name})…"}))
             intent = await run_in_threadpool(classify, req.message, provider, req.history)
             if req.file and not intent.files:            # explicit UI file field

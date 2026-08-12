@@ -487,6 +487,18 @@ def test_chat_stub_for_unwired_intent(offline):
     assert "isn't wired up yet" in json.loads(events["prose"])["text"]
 
 
+def test_chat_agent_mode_sse(offline):
+    """Phase B: `agent:true` drives the tool-use loop (app/agent_loop.py). Offline (NullProvider) it
+    degrades gracefully but still streams the meta/prose/done envelope over the same SSE path."""
+    client = TestClient(create_app())
+    r = client.post("/api/chat", json={"message": "what's in my folder?", "provider": "auto",
+                                       "agent": True})
+    assert r.status_code == 200
+    events = _parse_sse(r.text)
+    assert json.loads(events["meta"])["mode"] == "agent"
+    assert "prose" in events and "done" in events
+
+
 def _parse_sse(text: str) -> dict:
     """Collapse an SSE body into {event_name: data_string} (last one wins)."""
     out = {}
