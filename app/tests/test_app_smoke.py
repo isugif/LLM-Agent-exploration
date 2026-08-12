@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.app import create_app
-from app.intent import classify, Intent
+from app.resolve import Intent
 from shared.probes.fastq_probe import profile_fastq
 from shared.llm.provider import NullProvider
 
@@ -39,11 +39,12 @@ def test_profile_fastq(fastq):
     assert prof["qual_by_pos"][0] == pytest.approx(40.0)   # 'I' = 73 -> Q40
 
 
-def ground(message, history=None):
-    """classify (offline -> 'other') then apply the deterministic resolver, as the router does."""
+def ground(message, history=None, session=None):
+    """Build a bare Intent and apply the deterministic resolver, as the no-model router does
+    (the LLM classifier is retired; offline routing is pure resolve.py)."""
     from app import resolve
-    it = classify(message, NullProvider(), history=history)
-    resolve.resolve(it, message, history)
+    it = resolve.Intent()
+    resolve.resolve(it, message, history, session)
     return it
 
 
@@ -257,12 +258,9 @@ def test_multiqc_input_is_a_directory():
 
 def test_multiqc_defaults_to_session_runs_dir(session_dir, offline, monkeypatch):
     """'run multiqc' with no path defaults to this session's runs/ dir and reaches JUDGMENT (not the
-    'which FASTQ?' ask, not not_a_dir) — refusing only because the empty session has no reports."""
-    import app.api.routes_chat as rc
-    from app.intent import Intent
+    'which FASTQ?' ask, not not_a_dir) — refusing only because the empty session has no reports.
+    Deterministic path: resolve.py routes "can you run multiqc" to run_pipeline+multiqc on its own."""
     from app.session import STORE
-    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:1")     # deterministic: no live LLM
-    monkeypatch.setattr(rc, "classify", lambda m, p, history=None: Intent(intent="run_pipeline", tool="multiqc"))
     client = TestClient(create_app())
     ev = _parse_sse(client.post("/api/chat", json={"message": "can you run multiqc"}).text)
     stage = json.loads(ev["stage"])                             # last stage on a refusal = judgment
@@ -272,26 +270,13 @@ def test_multiqc_defaults_to_session_runs_dir(session_dir, offline, monkeypatch)
     assert STORE.runs_dir(STORE.list_sessions()[0]["sid"]).is_dir()             # the default dir exists
 
 
-def test_run_pipeline_tool_name_resolution(session_dir, offline, monkeypatch, fastq):
-    """A user-typed tool name is resolved (minimap->minimap2) or handled gracefully (bwa),
-    never crashing on a missing manifest — the bug from the 'using minimap' session."""
+def test_resolve_tool_name_fuzzy():
+    """A user-typed tool name is resolved (minimap->minimap2) or handled gracefully (bwa->None,
+    so the run_pipeline branch guides instead of crashing on a missing manifest)."""
     import app.api.routes_chat as rc
-    from app.intent import Intent
-
-    def fake_classify(tool):
-        def _c(message, provider, history=None):
-            return Intent(intent="run_pipeline", tool=tool, files=[fastq])   # a real file (exists)
-        return _c
-
-    client = TestClient(create_app())
-    # 'minimap' -> documented aligner minimap2 -> reaches the reference-ask (proves resolution)
-    monkeypatch.setattr(rc, "classify", fake_classify("minimap"))
-    prose = json.loads(_parse_sse(client.post("/api/chat", json={"message": "run minimap on the reads"}).text)["prose"])["text"]
-    assert "reference" in prose.lower()
-    # 'bwa' is undocumented -> a clear message, not a FileNotFoundError
-    monkeypatch.setattr(rc, "classify", fake_classify("bwa"))
-    prose2 = json.loads(_parse_sse(client.post("/api/chat", json={"message": "run bwa on the reads"}).text)["prose"])["text"]
-    assert "don't have a documented tool" in prose2 and "bwa" in prose2
+    assert rc._resolve_tool_name("minimap") == "minimap2"      # unique substring match
+    assert rc._resolve_tool_name("multiqc") == "multiqc"       # exact
+    assert rc._resolve_tool_name("bwa") is None                # undocumented -> graceful message
 
 
 def test_interrupted_turn_still_persists(session_dir, offline):
@@ -343,10 +328,9 @@ def test_session_query_run_then_recall(session_dir):
 def test_session_aware_output_routing():
     """A question about a run's OUTPUT resolves to recall when the session has runs — the
     'what can you tell me about the fastqc output?' -> 'which file?' bug."""
-    from app.intent import classify
     from app import resolve
     def route(msg, session=None):
-        it = classify(msg, NullProvider()); resolve.resolve(it, msg, [], session); return it.intent
+        it = resolve.Intent(); resolve.resolve(it, msg, [], session); return it.intent
     has = {"has_runs": True, "tools": ["fastqc"]}
     none = {"has_runs": False, "tools": []}
     assert route("what can you tell me about the fastqc output?", has) == "session_query"
@@ -361,10 +345,9 @@ def test_session_meta_facet_generalizes(session_dir):
     """'about this session' questions (id/size/tools) answer even on an empty session, and route."""
     from app.session import STORE
     from app.capabilities import session_query as sq
-    from app.intent import classify
     from app import resolve
     def route(msg, session=None):
-        it = classify(msg, NullProvider()); resolve.resolve(it, msg, [], session); return it.intent
+        it = resolve.Intent(); resolve.resolve(it, msg, [], session); return it.intent
     for q in ("what session is this?", "what's my session id?", "how many runs have I done?",
               "what tools have I used?"):
         assert route(q, {"has_runs": False, "tools": []}) == "session_query", q
@@ -450,9 +433,9 @@ def test_run_pipeline_event_mapping():
 
 @pytest.fixture()
 def offline(monkeypatch):
-    """Force the deterministic NullProvider path so chat tests don't depend on a live LLM."""
+    """Force no reachable model so chat routes to the deterministic fallback (no live LLM)."""
     import app.api.routes_chat as rc
-    monkeypatch.setattr(rc, "get_provider", lambda name=None: NullProvider())
+    monkeypatch.setattr(rc, "_chat_provider", lambda name=None: NullProvider())
 
 
 def test_chat_describe_data_sse(fastq, offline):
@@ -484,15 +467,31 @@ def test_chat_stub_for_unwired_intent(offline):
     assert r.status_code == 200
     events = _parse_sse(r.text)
     assert "panel" not in events                      # stub carries no data panel
-    assert "isn't wired up yet" in json.loads(events["prose"])["text"]
+    assert "isn't wired up" in json.loads(events["prose"])["text"]
 
 
-def test_chat_agent_mode_sse(offline):
-    """Phase B: `agent:true` drives the tool-use loop (app/agent_loop.py). Offline (NullProvider) it
-    degrades gracefully but still streams the meta/prose/done envelope over the same SSE path."""
+def test_chat_no_model_uses_deterministic(offline):
+    """No reachable model -> chat routes to the deterministic fallback; meta reports mode=deterministic."""
     client = TestClient(create_app())
-    r = client.post("/api/chat", json={"message": "what's in my folder?", "provider": "auto",
-                                       "agent": True})
+    r = client.post("/api/chat", json={"message": "which tool takes fastq?", "provider": "auto"})
+    assert r.status_code == 200
+    assert json.loads(_parse_sse(r.text)["meta"])["mode"] == "deterministic"
+
+
+def test_chat_model_present_uses_agent(monkeypatch):
+    """A reachable model -> chat routes to the agent loop; meta reports mode=agent. A scripted
+    provider answers immediately so no live LLM is needed."""
+    import app.api.routes_chat as rc
+    from app.agent_loop import AgentAction
+
+    class ScriptedProvider:
+        name = "scripted"
+        def extract(self, schema_model, system, prompt): return AgentAction(answer="hi")
+        def complete(self, system, prompt): return ""
+
+    monkeypatch.setattr(rc, "_chat_provider", lambda name=None: ScriptedProvider())
+    client = TestClient(create_app())
+    r = client.post("/api/chat", json={"message": "hello", "provider": "claude"})
     assert r.status_code == 200
     events = _parse_sse(r.text)
     assert json.loads(events["meta"])["mode"] == "agent"

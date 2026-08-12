@@ -86,48 +86,28 @@ export OLLAMA_MODEL=qwen2.5vl:7b         # any local model works
 bash shared/data/fetch_virus_fastq.sh    # download + subsample the test FASTQ
 ```
 
-## Run
-
-Both tracks share one CLI surface:
+## Run — the chat app (start here)
 
 ```bash
-# LangGraph
-python -m langgraph_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
-    --question "QC these Illumina SARS-CoV-2 RNA-seq reads before trimming"
-
-# NOOA
-python -m nooa_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
-    --question "QC these Illumina SARS-CoV-2 RNA-seq reads before trimming"
+pip install -r requirements.txt          # adds fastapi + uvicorn + mcp[cli]
+python -m app                            # http://127.0.0.1:8000  (--port / --model / --workdir)
 ```
 
-Trigger a **refusal** (judgment stops it before compute):
-
-```bash
-python -m langgraph_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
-    --question "Assess these reads" \
-    --deliverable "give me the overall cohort quality conclusion across all samples"
-```
-
-A **second tool** (MultiQC) with the same CLI — point it at a directory of tool reports:
-
-```bash
-python -m langgraph_impl.run --tool multiqc --fastq <dir_of_fastqc_reports> \
-    --question "aggregate the FastQC reports for this run"
-```
-
-The LLM is only used for judgment-shaped steps; deterministic checks still run with Ollama off
-(the pipeline reports `llm_provider: null` and degrades gracefully).
+`python -m app` drops you into the chat. When a model is reachable it uses the **agent**: a capable
+model — the local `claude` CLI if installed (uses your subscription, no API key), else Ollama —
+drives the harness as tools. The model can inspect and query your data folder and run outputs and
+*request* tools, but the **only** way to execute a bioinformatics tool is `run_tool`, which
+self-guards (onboarding → judgment → refuse|run → evaluate|diagnose) — no shell is ever exposed to
+the model. With **no model reachable**, chat falls back to a deterministic regex router, so it still
+works offline (profile a FASTQ, run a tool, inspect the folder). Open it **in your data folder** with
+the `bin/abi` launcher — see Chat UI below.
 
 ## Chat UI
 
 A split-screen web app (chat left, ground-truth **facts + plots** right) is the interactive front
-end. Type free text; an LLM classifies the request into a typed **Intent** and deterministic code
-dispatches — the model routes and narrates, it never produces the facts.
-
-```bash
-pip install -r requirements.txt          # adds fastapi + uvicorn
-python -m app                            # http://127.0.0.1:8000  (--port / --model / --workdir)
-```
+end. A capable model drives the harness as tools (agent mode); with no model, a deterministic regex
+router handles common requests. Either way the model routes and narrates — deterministic code
+produces every fact, and only `run_tool` executes anything.
 
 **Open the app in your data folder.** Data paths resolve against a **working directory** that
 defaults to where you launched the app (a bare filename or relative path is looked up there, with
@@ -148,46 +128,61 @@ the measured facts (format, read-length min/max/mode, Phred encoding, SE/PE hint
 histogram, and per-position quality. Pick **Ollama** or **Claude** in the model dropdown (Claude uses
 your local `claude` login — no API key).
 
-Wired intents:
+What it can do (agent tools, and the deterministic fallback covers the same common asks):
 
-- **describe_data** — profile a FASTQ (facts + plots).
-- **explain_tool** — answer about a named tool, grounded in its docs + live `--help`.
-- **find_tool** — cross-tool discovery: *"which tool takes fastq?"*, *"what's good for alignment?"*.
-- **run_pipeline** — run a tool through the four harnesses, streaming each stage; the HTML report
-  (FastQC/MultiQC) opens in the **Report** tab (or a new browser tab).
-- **add_tool** — install + document a new tool via the curator (HRR-gated: documented but not
+- **inspect/query the folder** — *"what data do I have?"*, read a file's head, profile a FASTQ
+  (facts + read-length/quality plots).
+- **run tools through the harness** — *"run fastqc on each of the snf2 files"*, *"run rustqc on the
+  output"*; every run streams its stages and only `run_tool` executes. The HTML report (FastQC/MultiQC)
+  opens in the **Report** tab.
+- **chain tools** — inspect run **outputs** (`list_outputs`) and feed one tool's output into the next.
+- **explain / find tools** — *"tell me about fastqc"*, *"which tool takes fastq?"*.
+- **add a tool** — install + document a new tool via the curator (HRR-gated: documented but not
   runnable until a human reviews the safety contract).
-- **session_query** — recall this session's past runs: *"where did I write the fastqc output?"*,
-  *"what were the results?"*. Runs persist to a disk-backed log (`~/.bio_chat/sessions/`), and the
-  **session picker** reloads a past session to continue or review it.
-- **describe_workdir / set_workdir** — inspect the current working folder (*"what's in my folder?"*)
-  or point it at your data (*"my data is in /path/to/run"*); see the launcher note above.
+- **recall this session** — *"where did I write the fastqc output?"*; runs persist to
+  `~/.bio_chat/sessions/`, and the **session picker** reloads a past session.
 
-The LLM only classifies and narrates; deterministic code produces every fact, so the app degrades
-gracefully with the model off.
+The model routes and narrates; deterministic code produces every fact, so the app still catches real
+problems with the model off. Pick **Ollama** or **Claude** in the model dropdown; the header shows the
+active brain (`agent · claude` / `deterministic`).
 
-### Agent mode + MCP server
+### MCP server (external clients)
 
-The hand-built intent router is being replaced by letting a capable model **drive the harness as
-tools**. The safety rule is that the model may chat, inspect/query the input folder and run outputs,
-and *request* tools — but the only tool that executes anything is `run_tool`, which self-guards via
-the `onboard → judge → refuse|run → evaluate|diagnose` pipeline. No shell / arbitrary-code path is
-exposed.
+Point an external client (Claude Desktop/Code, or a local-model agent) at the same harness over stdio
+— the same self-guarding `run_tool`, no shell exposed:
 
-- **Agent mode (UI):** tick the **agent** checkbox in the header. Your message drives
-  `app/agent_loop.py` (a model-agnostic `provider.extract` tool-use loop) with `list_workdir`,
-  `list_outputs`, `read_file`, `probe_data`, catalog/explain/find, and the `run_tool` gate — so
-  *"run fastqc on each of the snf2 files"* or *"run rustqc on the output"* works without exact
-  phrasing. The legacy intent path is still the default (agent mode is opt-in while it's proven).
-- **MCP server:** point an external client (Claude Desktop/Code, or a local-model agent) at the same
-  harness over stdio:
-  ```bash
-  pip install -r requirements.txt        # adds mcp[cli]==2.0.0
-  python -m mcp_server.server            # stdio; register with your MCP client
-  ```
+```bash
+python -m mcp_server.server              # stdio; register with your MCP client (mcp[cli]==2.0.0)
+```
 
-Design notes + the trust-boundary discussion: [`docs/mcp/`](docs/mcp/). Full picture:
+Design notes + the trust-boundary discussion: [`docs/mcp/`](docs/mcp/) (start with
+[`docs/mcp/PLAN.md`](docs/mcp/PLAN.md)). Full picture:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#the-mcp-re-exposure--agent-loop-the-model-driven-surface).
+
+## Advanced / research: compare LangGraph vs NOOA
+
+The app and MCP server run the harness via `shared/pipeline.py`. The original research question —
+LangGraph vs NOOA as orchestration frameworks (see [`docs/COMPARISON.md`](docs/COMPARISON.md)) — is
+exercised through the two per-track CLIs, which sequence the *same* `shared/` harness two ways:
+
+```bash
+# a QC run, either track
+python -m langgraph_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
+    --question "QC these Illumina SARS-CoV-2 RNA-seq reads before trimming"
+python -m nooa_impl.run     --fastq shared/data/SRR11140744_10k.fastq.gz \
+    --question "QC these Illumina SARS-CoV-2 RNA-seq reads before trimming"
+
+# a refusal (judgment stops it before compute)
+python -m langgraph_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
+    --question "Assess these reads" \
+    --deliverable "give me the overall cohort quality conclusion across all samples"
+
+# a second tool (MultiQC) — point it at a directory of tool reports
+python -m langgraph_impl.run --tool multiqc --fastq <dir_of_fastqc_reports> \
+    --question "aggregate the FastQC reports for this run"
+```
+
+Both tracks degrade gracefully with Ollama off (they report `llm_provider: null`).
 
 ## Tests
 

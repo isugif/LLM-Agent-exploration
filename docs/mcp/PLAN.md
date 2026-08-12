@@ -8,12 +8,16 @@ clone. Design notes that led here: [`abundant-pondering-wave.md`](abundant-ponde
 ## Status snapshot (2026-08-12)
 
 - **Phase A — MCP server + self-guarding gate: DONE, merged to `main`.**
-- **Phase B — model-agnostic agent loop: CORE DONE, merged (agent mode is OPT-IN).**
-  Remaining: flip the default, retire the intent/resolve brain, archive the orchestrator trees, add
-  the run state machine.
+- **Phase B — model-agnostic agent loop: DONE and now the DEFAULT.** Agent drives whenever a model is
+  reachable (Claude CLI preferred, else Ollama); no model → the deterministic `resolve.py` fallback.
+  The LLM classifier (`app/intent.py`) is retired; `describe_data`/`session_query`/`add_tool` ported
+  as agent tools; the agent path no longer imports LangGraph (`app/stage_render.py`). Orchestrators
+  **kept for the comparison** (demoted in the README), not archived.
+  Remaining: (a) validate loop quality with a real model on multi-step / tool-chaining tasks;
+  (b) the server-side run state machine (resume + HRR pause).
 - **Phase C — interactive experiment-document contract: NOT STARTED.**
 
-Tests at merge: 101 pass; parity gate 14/0 (deterministic).
+Tests: 102 pass; parity gate 14/0 (deterministic).
 
 ## Context / goal
 
@@ -29,9 +33,10 @@ self-guarding gate**.
   No shell / arbitrary-code / write-outside-harness is ever exposed. Hard boundary, built phased.
 - **Model-agnostic brain.** Provider-swappable via `provider.extract`: Claude `claude` CLI
   (subscription, no API tokens) by default, Ollama optional. No native tool-calling API required.
-- **Orchestrators.** Lift the LangGraph node bodies into framework-neutral `shared/harnesses/*`
-  (DONE — nodes now delegate), then eventually **archive** (not delete) `langgraph_impl/` +
-  `nooa_impl/` so the future LangGraph-MCP-client / framework comparison stays cheap to restart.
+- **Orchestrators.** Lifted the LangGraph node bodies into framework-neutral `shared/harnesses/*`
+  (DONE — nodes now delegate). Decision: **keep** `langgraph_impl/` + `nooa_impl/` for the framework
+  comparison (demoted below the chat headline in the README), NOT archived. The app/MCP use
+  `shared/pipeline.py`; the trees stay runnable for the comparison + parity gate.
 
 Full architecture + trust-boundary diagram: [`../ARCHITECTURE.md`](../ARCHITECTURE.md#the-mcp-re-exposure--agent-loop-the-model-driven-surface).
 
@@ -50,34 +55,35 @@ Full architecture + trust-boundary diagram: [`../ARCHITECTURE.md`](../ARCHITECTU
 
 ---
 
-## Phase B — model-agnostic agent loop  ◑ CORE DONE, tail remaining
+## Phase B — model-agnostic agent loop  ✅ DONE (now the default)
 
 **Done:**
 - `app/agent_loop.py` — provider-driven tool-use loop (`AgentAction` via `provider.extract`). Tools:
-  read-only `list_workdir` / `list_outputs` / `read_file` / `probe_data`, knowledge `list_catalog` /
-  `explain_tool` / `find_tool`, and the `run_tool` gate. Idempotent `run_tool` + repeat guard +
-  deterministic close-out prevent runaway loops.
-- Wired behind the `agent` flag on `POST /api/chat` (`app/api/routes_chat.py`); UI header has an
-  **agent** toggle (`app/ui/index.html` + `app.js`). Legacy intent/resolve path is still the DEFAULT.
-- Tests: `tests/test_agent_loop.py`; app smoke `app/tests/test_app_smoke.py::test_chat_agent_mode_sse`.
+  read-only `list_workdir` / `list_outputs` / `read_file` / `probe_data` / `describe_data`, knowledge
+  `list_catalog` / `explain_tool` / `find_tool` / `session_query` / `add_tool`, and the `run_tool`
+  gate. Idempotent `run_tool` + repeat guard + deterministic close-out prevent runaway loops. No
+  LangGraph import (render helpers moved to `app/stage_render.py`).
+- **Default routing** (`app/api/routes_chat.py`): model reachable → agent loop (Claude CLI preferred
+  via `_chat_provider`, else Ollama); no model → deterministic `resolve.py` router. The `agent` flag +
+  UI checkbox are gone; the header shows the active brain.
+- **Retired** the LLM classifier `app/intent.py`; moved `Intent` + `stub_text` into `app/resolve.py`,
+  which stays as the deterministic offline router (its path extractors `path_in`/`aln_in`/… stay too).
+- Tests: `tests/test_agent_loop.py`; app smoke routing tests (`test_chat_no_model_uses_deterministic`,
+  `test_chat_model_present_uses_agent`).
 
 **Remaining (resume here):**
 1. **Validate loop quality with a real model** (Claude CLI + Ollama) across multi-step, multi-file,
    and tool-chaining tasks (e.g. align → `list_outputs` → rustqc). Tighten the system prompt if the
-   model still mis-picks files.
-2. **Flip the default** to agent mode, then **retire `app/intent.py` + `app/resolve.py`**. Preserve
-   `resolve.py`'s path extractors (`path_in`, `aln_in`, `fasta_ref_in`, `gtf_in`) as plain utilities
-   if any tool still needs them.
-3. **Archive the orchestrator trees** (Phase A3, deferred): once the legacy `run_pipeline` capability
-   no longer imports `langgraph_impl.graph`, move `langgraph_impl/` + `nooa_impl/` to `archive/` and
-   update `docs/COMPARISON.md` (server = tool interface; orchestration = client layer). Note
-   `tests/run_tests.py` also imports both trees — update it too.
-4. **Server-side run state machine** (`draft→onboarded→judged_ok→refused→running→completed`, bound to
+   model mis-picks files.
+2. **Server-side run state machine** (`draft→onboarded→judged_ok→refused→running→completed`, bound to
    a server-issued run id): the framework-neutral home for resume + the HRR human-review pause — where
    "replay/restart/HITL" live now that LangGraph is out of the hot path.
-5. **Provider loop tradeoff:** the subscription `claude` CLI is single-shot, so the loop is
-   hand-rolled ReAct; if quality is inadequate, fall back to the Anthropic Messages API (token-billed,
-   native tool-use loop). Both keep the boundary hard.
+3. **Provider loop tradeoff:** the subscription `claude` CLI is single-shot, so the loop is hand-rolled
+   ReAct; if quality is inadequate, fall back to the Anthropic Messages API (token-billed, native
+   tool-use loop). Both keep the boundary hard.
+
+_(The earlier "archive the orchestrator trees" item is dropped — decision: keep them for the
+comparison, demoted in the README.)_
 
 ---
 

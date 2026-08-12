@@ -1,11 +1,12 @@
-"""POST /api/chat — classify the message, dispatch, stream the result over SSE.
+"""POST /api/chat — route the message to the right brain and stream the result over SSE.
 
-Two shapes of capability:
-  * describe_data — single-shot: emit one `panel` event + `prose`.
-  * run_pipeline  — streaming: emit a `stage` event per harness stage as the pipeline runs, then a
-    deterministic `prose` summary. The blocking graph generator is bridged to async via a thread+queue.
+Routing (chosen per request from the provider dropdown, default 'auto'):
+  * model reachable  -> the agentic tool-use loop (app/agent_loop.py); Claude CLI preferred, else Ollama.
+  * no model         -> the deterministic regex router (app/resolve.py): grounds a bare Intent() and
+    dispatches to a capability. Works fully offline; the LLM classifier is retired.
 
-Provider is chosen per request ('ollama' | 'claude' | 'auto').
+Capability shapes (deterministic path): describe_data/explain_tool/... single-shot (one `panel` +
+`prose`); run_pipeline streams a `stage` per harness stage (blocking graph bridged to async).
 """
 
 from __future__ import annotations
@@ -21,10 +22,26 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from shared.llm.provider import get_provider
+from shared.llm.provider import (NullProvider, OllamaProvider, ClaudeCLIProvider, ollama_available)
 from shared import catalog, contracts_lib as cl, dataset
 from app import resolve
 from app.session import STORE
+
+
+def _chat_provider(name: str | None):
+    """Pick the chat brain. Explicit 'ollama'/'claude' if reachable; 'auto'/None prefers the Claude
+    CLI (subscription, no API key), then Ollama, then NullProvider (which routes to the deterministic
+    regex fallback). This is the ONLY place the chat's Claude-first default lives — the global
+    get_provider('auto') stays Ollama-first for the CLI/tests/harness internals."""
+    if name == "ollama":
+        return OllamaProvider() if ollama_available() else NullProvider()
+    if name == "claude":
+        p = ClaudeCLIProvider()
+        return p if p.is_available() else NullProvider()
+    p = ClaudeCLIProvider()                       # auto / None: Claude first
+    if p.is_available():
+        return p
+    return OllamaProvider() if ollama_available() else NullProvider()
 
 
 def _resolve_tool_name(name: str) -> str | None:
@@ -71,7 +88,6 @@ def _existing_path(p: str | None) -> str | None:
     return workdir.resolve_path(p)
 from app import workdir
 from app import agent_loop
-from app.intent import classify, stub_text
 from app.capabilities import (describe_data, run_pipeline, add_tool, explain_tool, find_tool,
                               session_query, workdir_cmd)
 
@@ -82,8 +98,6 @@ class ChatRequest(BaseModel):
     file: str | None = None                # optional explicit file path from the UI
     history: list[dict] = []               # prior turns [{role, content}] for context (memory)
     session_id: str | None = None          # persistent session id (UI localStorage); validated server-side
-    agent: bool = False                    # Phase B: drive via the tool-use loop (app/agent_loop.py)
-                                           # instead of the legacy intent/resolve brain
 
 
 def _sse(event: str, data: str) -> str:
@@ -117,13 +131,14 @@ def make_chat_router() -> APIRouter:
 
     @router.post("/api/chat")
     async def chat(req: ChatRequest):
-        provider = get_provider(req.provider)
+        provider = _chat_provider(req.provider)
         sid = STORE.ensure(req.session_id)          # validated/minted; echoed back so the UI persists it
 
         async def _emit(rec):
-            # Phase B: the tool-use loop (model-agnostic; the model requests tools, run_tool
-            # self-guards). Kept behind a flag while the legacy intent/resolve path stays default.
-            if req.agent:
+            # Default brain: the agentic tool-use loop whenever a model is reachable (Claude CLI
+            # preferred, else Ollama). With NO model we fall back to the deterministic regex router
+            # (app/resolve.py) so the chat still works offline — the LLM classifier is retired.
+            if not isinstance(provider, NullProvider):
                 async for kind, payload in _abridge(
                         lambda: agent_loop.run_agent(req.message, req.history, provider, sid)):
                     if kind == "error":
@@ -133,8 +148,9 @@ def make_chat_router() -> APIRouter:
                     yield rec(ev_name, json.dumps(data))
                 return
 
-            yield rec("log", json.dumps({"text": f"Classifying request (model: {provider.name})…"}))
-            intent = await run_in_threadpool(classify, req.message, provider, req.history)
+            # --- deterministic fallback (no model) — grounded by regex, no LLM classify ---
+            yield rec("log", json.dumps({"text": "No model reachable — deterministic mode."}))
+            intent = resolve.Intent()
             if req.file and not intent.files:            # explicit UI file field
                 intent.files = [req.file]
             runs = STORE.load_runs(sid)
@@ -158,7 +174,8 @@ def make_chat_router() -> APIRouter:
             dataset.set_context(f"chat:{intent.intent}")   # tag this turn's LLM calls
             dataset.record("intent", model=provider.name, prompt=req.message,
                            response=intent.intent, labels={"intent": intent.intent})
-            yield rec("meta", json.dumps({"provider": provider.name, "intent": intent.intent, "sid": sid}))
+            yield rec("meta", json.dumps({"provider": provider.name, "intent": intent.intent,
+                                          "mode": "deterministic", "sid": sid}))
             for n in notes:
                 yield rec("log", json.dumps({"text": f"grounded: {n}"}))
 
@@ -306,7 +323,7 @@ def make_chat_router() -> APIRouter:
                 yield rec("prose", json.dumps({"text": result.get("prose", "")}))
 
             else:
-                yield rec("prose", json.dumps({"text": stub_text(intent)}))
+                yield rec("prose", json.dumps({"text": resolve.stub_text(intent)}))
 
             yield rec("done", "{}")
 
