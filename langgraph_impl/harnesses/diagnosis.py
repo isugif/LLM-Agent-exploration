@@ -1,21 +1,13 @@
-"""Diagnosis harness (LangGraph node) — HARD failures (exit != 0).
+"""Diagnosis harness (LangGraph node) — thin adapter over shared.harnesses.diagnosis.
 
-Reads the audit trail (stderr/stdout/error) and matches it against the contract's failure_modes
-signals. A match yields a known fix; no match escalates to human curation. This is deterministic
-pattern-matching over the incident library — the crash has ground truth, so no LLM is required.
+HARD failures (exit != 0): match the audit trail against the contract's failure_modes; novel crashes
+escalate to human curation. Deterministic; logic single-sourced in shared/harnesses/diagnosis.py.
 """
 
 from __future__ import annotations
 
-from shared import contracts_lib as cl
-from shared.harness_steps import diagnose_run
+from shared.harnesses.diagnosis import diagnose
 
 
 def diagnosis_node(state: dict) -> dict:
-    contract = cl.load_contract(state["tool"])
-    rr = state["run_result"]
-    return {"verdict": diagnose_run(
-        contract,
-        stdout=rr.get("stdout"), stderr=rr.get("stderr"),
-        error=rr.get("error"), exit_code=rr.get("exit_code"),
-    ).to_dict()}
+    return diagnose(tool=state["tool"], run_result=state["run_result"])

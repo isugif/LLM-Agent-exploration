@@ -1,21 +1,19 @@
-"""Execution node (LangGraph) — deterministic compute. No LLM, no judgment.
+"""Execution node (LangGraph) — thin adapter over shared.harnesses.execution.
 
-Uses the generic contract-driven runner (shared.execution.runner.run_tool): the tool's contract.yml
-declares how to invoke it, so this node is tool-agnostic. In the real system this is where Nextflow
-(retries, provenance) would sit.
+Contract-driven compute lives in shared/harnesses/execution.py (single source shared with the MCP
+order-guard). No LLM, no judgment.
 """
 
 from __future__ import annotations
 
-import tempfile
-
-from shared import contracts_lib as cl
-from shared.execution.runner import run_tool
+from shared.harnesses.execution import execute
 
 
 def execution_node(state: dict) -> dict:
-    out_dir = state.get("out_dir") or tempfile.mkdtemp(prefix=f"{state['tool']}_")
-    contract = cl.load_contract(state["tool"])
-    inputs = {"reference": state.get("reference"), "annotation": state.get("annotation")}
-    result = run_tool(contract, state["fastq"], out_dir, inputs=inputs)
-    return {"run_result": result.to_dict(), "out_dir": out_dir}
+    return execute(
+        tool=state["tool"],
+        fastq=state["fastq"],
+        out_dir=state.get("out_dir"),
+        reference=state.get("reference"),
+        annotation=state.get("annotation"),
+    )

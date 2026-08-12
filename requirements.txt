@@ -21,5 +21,10 @@ pydantic==2.13.4
 fastapi==0.141.1
 uvicorn[standard]==0.52.1
 
+# MCP server (mcp_server/) — official Model Context Protocol Python SDK; exposes the harness as
+# stdio tools so a client (Claude / a local-model agent) supplies intelligence while execution stays
+# behind the self-guarding run_tool gate. `cli` extra pulls the `mcp` dev command used to smoke-test.
+mcp[cli]==2.0.0
+
 # External (not pip): FastQC 0.12.x  ->  mamba install -c bioconda fastqc
 # External: a local Ollama server + a model (default OLLAMA_MODEL=qwen2.5vl:7b)
