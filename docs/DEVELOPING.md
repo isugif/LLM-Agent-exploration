@@ -6,16 +6,20 @@ Start with the [README](../README.md) for what the project is; this is the contr
 ## Environment
 
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh" && conda activate nooa
+conda create -n bioharness python=3.12 -y
+conda activate bioharness
 pip install -r requirements.txt          # langgraph, langchain-core, pyyaml, jsonschema, requests,
                                          # fastapi, uvicorn, mcp[cli], pydantic
-mamba install -c bioconda fastqc         # FastQC 0.12.x
-export OLLAMA_MODEL=qwen2.5vl:7b         # local model (Ollama at :11434); the `claude` CLI also works
+conda install -c bioconda fastqc -y      # FastQC 0.12.x
+export OLLAMA_MODEL=qwen2.5vl:7b         # optional local model (Ollama :11434); the `claude` CLI also works
 bash shared/data/fetch_virus_fastq.sh    # download + subsample the test FASTQ
 ```
 
-- The `nooa` conda env provides `nooa` (0.0.8, **not on PyPI** — do not `pip install nooa`) plus
-  langgraph + deps; both tracks share it.
+- This env runs the **chat app**, the **MCP server**, and the **LangGraph track** — everything in the
+  Quick start plus `python -m pytest` / `tests/run_tests.py`.
+- The **NOOA track** (`python -m nooa_impl.run`) additionally requires the `nooa` package (0.0.8),
+  which is **not on PyPI** and is installed separately — so that one comparison track is not
+  reproducible from `requirements.txt` alone.
 - The **curator** installs its curation-target tools into a separate `curator-tools` env (hygiene).
 
 ## Layout

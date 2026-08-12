@@ -46,27 +46,31 @@ Two choices make this more than four LLM vibe-checks:
                    └─▶ run ─▶ evaluate | diagnose ─▶ full trace back to you
 ```
 
-## Try it (2 minutes)
+## Quick start
 
 ```bash
-conda activate nooa                      # the project env (see docs/DEVELOPING.md to build it)
-pip install -r requirements.txt          # fastapi + uvicorn + mcp[cli] + langgraph + deps
-mamba install -c bioconda fastqc         # FastQC 0.12.x
+# create a fresh conda env and install the Python deps
+conda create -n bioharness python=3.12 -y
+conda activate bioharness
+pip install -r requirements.txt          # fastapi + uvicorn + mcp[cli] + langgraph + pydantic + …
+conda install -c bioconda fastqc -y      # FastQC 0.12.x (the first wired tool)
 bash shared/data/fetch_virus_fastq.sh    # a small SARS-CoV-2 test FASTQ
+
 python -m app                            # http://127.0.0.1:8000  — the chat opens here
 ```
 
 `python -m app` drops you into a chat. With a model reachable it uses the **agent** — the local
 `claude` CLI (your subscription, no API key) if installed, else Ollama — which drives the harness as
-tools; only `run_tool` executes anything. With no model it falls back to a deterministic router, so it
-still works offline. Try:
+tools; only `run_tool` executes anything. With **no** model it falls back to a deterministic router, so
+it still works offline. Try:
 
 - *"run fastqc on `shared/data/SRR11140744_10k.fastq.gz`"* → watch it onboard → judge → run → evaluate.
 - *"assess these reads and give me the overall cohort quality conclusion"* → watch it **refuse before
   compute** (FastQC is not a cohort-QC tool — a must-not-use boundary).
 
 External clients (Claude Desktop/Code) can drive the same harness over stdio:
-`python -m mcp_server.server`.
+`python -m mcp_server.server`. (The NOOA research track needs one extra, non-PyPI dependency — see
+[`docs/DEVELOPING.md`](docs/DEVELOPING.md).)
 
 ## Status — early, and honest about it
 

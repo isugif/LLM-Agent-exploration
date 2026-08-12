@@ -1,9 +1,10 @@
-# Python deps for both tracks. Install into the conda `nooa` env (which already provides nooa).
+# Python deps. Create a fresh env and install:
 #
-#   conda activate nooa
+#   conda create -n bioharness python=3.12 -y && conda activate bioharness
 #   pip install -r requirements.txt
 #
-# nooa itself is installed separately (conda env `nooa`, package `nooa==0.0.8`).
+# This covers the chat app, the MCP server, and the LangGraph track. The NOOA research track
+# additionally needs `nooa` (0.0.8), which is NOT on PyPI — install it separately (see docs/DEVELOPING.md).
 
 # Pinned to the versions the framework comparison was validated against — the repo's
 # CONCLUSIONS depend on framework behavior, so results must be reproducible.
