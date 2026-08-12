@@ -6,6 +6,23 @@ so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.4.0] — 2026-08-12
+
+Shared-layer additions for the MCP re-exposure + agent loop. **No NOOA track code changed**; the
+new framework-neutral step functions mirror the same `shared/harness_steps.py` logic the NOOA agents
+already wrap, and the NOOA↔LangGraph parity gate is unchanged (14 pass / 0 fail, deterministic).
+
+### Added
+- shared: `shared/harnesses/{onboarding,judgment,execution,evaluation,diagnosis}.py` — framework-
+  neutral per-checkpoint functions (dict in, dict out).
+- shared: `shared/pipeline.py` — an explicit **order-guard** (`onboard → judge → refuse|run →
+  evaluate|diagnose`) reused by the MCP server and agent loop.
+- `mcp_server/server.py` — stdio MCP server exposing the harness as tools; `run_tool` self-guards via
+  `shared/pipeline` (no raw shell/exec). Pins `mcp[cli]==2.0.0`.
+- app: `app/agent_loop.py` — model-agnostic tool-use loop behind the `agent` flag on `POST /api/chat`.
+- docs: `docs/mcp/` — MCP-pivot design notes + chat-engine trust-boundary discussion.
+- tests: `tests/test_pipeline.py`, `tests/test_mcp_server.py`, `tests/test_agent_loop.py`.
+
 ## [0.3.0] — 2026-08-07
 
 Shared-layer change (YAML structure); no track-specific code changed — the assembled contract keeps
