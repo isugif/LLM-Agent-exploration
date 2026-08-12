@@ -1,206 +1,87 @@
 # Bio Harness
 
-Safe agentic bioinformatics — an LLM-agent harness that refuses silently-wrong analyses via machine-readable contracts + four checkpoints. MCP server + local models.
+**Safe agentic bioinformatics** — an LLM-agent harness that *refuses* silently-wrong analyses instead
+of confidently reporting them. Machine-readable biological contracts + four checkpoints + a
+server-enforced refusal gate.
 
-Bioinformatics fails **silently**: a pipeline exits zero but returns wrong biology because an
-assumption was violated in the organism, the sequencing technology, or the software. We make those
-assumptions explicit — every data type, database, tool, and workflow carries a **contract** stating
-its preconditions, operating range, and must-not-use boundaries — then place **four checkpoints**
-around the run. Onboarding turns the scientist's question into a structured spec, reconciling
-declared facts against measured ones. Judgment routes it to a workflow whose contracts don't
-conflict. Diagnosis explains crashes; results evaluation flags output outside expected ranges. Novel
-cases escalate to human curation and return as versioned contracts, so the system's judgment
-compounds.
+## The problem
 
-We build this **agentic bioinformatician two ways** — with
-[LangGraph](https://langchain-ai.github.io/langgraph/) and with
-[NVIDIA Object-Oriented Agents (NOOA)](https://github.com/NVIDIA-NeMo/labs-OO-Agents) — on the
-*same* architecture, so the frameworks can be compared honestly.
-([NOOA GitHub](https://github.com/NVIDIA-NeMo/labs-OO-Agents) ·
-[NOOA paper](https://arxiv.org/html/2607.20709v1))
+Crashes report themselves; **wrong biology does not.** A pipeline exits 0 and returns a biologically
+wrong answer because an assumption was violated — in the organism, the sequencing technology, or the
+software. A capable LLM agent makes this *worse*: it will always produce a plausible, well-cited
+result, even when the honest answer is *"this analysis cannot support that conclusion."* That
+confident-but-wrong output is the failure mode this project is built against.
 
-## The four harnesses
+## The idea
 
-1. **Onboarding** — turn the scientist's question into a spec, reconciling *declared* facts against
-   *measured* facts probed from the files.
-2. **Judgment** (fit critic) — route only to a tool whose contract doesn't conflict with the spec;
-   refuse otherwise, before any compute.
-3. **Diagnosis** — on a crash, match the failure against known failure modes.
-4. **Evaluation** — on success, score output against expected ranges and flag anomalies.
+Every tool carries a **machine-readable contract** — preconditions, validated operating range,
+must-not-use boundaries, known failure modes — and **four checkpoints** enforce it, each with the
+right to refuse:
 
-Full design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Framework comparison:
-[`docs/COMPARISON.md`](docs/COMPARISON.md). Every case × both tracks is benchmarked in
-[`tests/REPORT.md`](tests/REPORT.md).
+1. **Onboarding** — probe the actual files for *measured* facts and reconcile them against what the
+   scientist *declared* (a declared-vs-measured disagreement is a first-class error signal).
+2. **Judgment** — refuse a tool whose contract conflicts with the request, *before any compute*.
+3. **Diagnosis** — on a crash, match it against known failure signatures.
+4. **Evaluation** — on success, score output against assay-keyed expected-range tables.
 
-Milestone 1 implements this end-to-end on **FastQC** (small + fast for iteration).
+Two choices make this more than four LLM vibe-checks:
 
-## Layout
+- **The refusal gate is server-enforced, not requested of the model.** The harness is exposed as an
+  **MCP server** whose single execution entrypoint, `run_tool`, internally runs onboarding → judgment
+  → (refuse | execute) → (diagnose | evaluate) and returns the full trace — so a capable, eager agent
+  **cannot skip the gate even if it never calls `judge`.** No raw shell or arbitrary-code path is ever
+  exposed; the policy boundary lives in the tool surface, not in a prompt an agent can talk around.
+- **The load-bearing logic is deterministic; the LLM is narrow.** Preconditions evaluate through a
+  restricted AST walker (no `eval`); metric tiers and crash matching are deterministic. The model
+  interprets the question and narrates — it never decides pass/fail, and the pipeline still catches
+  real problems with the model switched off.
 
 ```
-bio-tools/         ONE folder per tool = its single source of truth
-  fastqc/          manifest.yml + clean/<section>.yml (machine sections assembled into the contract)
-  multiqc/         same layout — second tool, added with no harness changes
-shared/            framework-agnostic knowledge + execution (BOTH tracks import this)
-  sections/schemas.py  pydantic schemas for every clean section (the validation gate)
-  contracts_lib.py assemble contract from manifest, safe precondition eval, metric scoring
-  contracts/expectations/  assay-keyed expected-range tables (referenced by expectations_ref)
-  probes/          measured-facts probes (FASTQ; report-dir for aggregators)
-  execution/       generic contract-driven runner (+ audit record)
-  parsers/         per-tool output parsers (fastqc, multiqc)
-  harness_steps.py the four harnesses' step logic, shared by both tracks
-  catalog.py + knowledge/  the tool catalog + purpose taxonomy (powers find_tool)
-  tools/registry.py  tool_id -> parser + input probe
-  llm/             pluggable Ollama/Claude provider (LangGraph track)
-  data/            fetch_virus_fastq.sh — small SARS-CoV-2 test dataset
-  harnesses/       framework-neutral step fns (onboarding/judgment/execution/evaluation/diagnosis)
-  pipeline.py      the order-guard: onboard -> judge -> refuse|run -> evaluate|diagnose (single source)
-langgraph_impl/    LangGraph track: StateGraph + node fns (now thin adapters over shared/harnesses)
-nooa_impl/         NOOA track: Agent classes + plain orchestrator  (+ CHANGELOG.md)
-curator/           LLM-driven curator: installs a tool + writes its clean sections (see docs/CURATOR.md)
-mcp_server/        stdio MCP server exposing the harness as tools (self-guarding run_tool)
-app/               chat web app (FastAPI + JS UI) over the shared core; agent_loop.py = agent mode
-tests/             fixtures per failure mode + run_tests.py -> REPORT.md
-docs/              ARCHITECTURE.md, COMPARISON.md, ADD_A_TOOL.md, BACKLOG.md, CURATOR.md, TRAITS.md, PRINCIPLES.md, GLOSSARY.md
-docs/mcp/          design notes for the MCP pivot + the chat-engine trust-boundary discussion
-shared/traits/     reusable constraints/knowledge (three pillars): runtime/ biology/ domain/
+  you ─▶ chat (agent: claude | ollama)   ·   or an MCP client (Claude Desktop/Code)
+             │  may inspect/query files + REQUEST tools — no shell is ever exposed
+             ▼
+        run_tool ── the ONLY execution entrypoint, server-enforced ──
+             │
+   onboard ─▶ judge ─▶ REFUSE  (nothing runs)
+                   └─▶ run ─▶ evaluate | diagnose ─▶ full trace back to you
 ```
 
-The **curator** (`curator/`) is an LLM-driven tool that provisions a tool and writes its clean YAML
-sections; its verified properties, token costs, and findings are logged in
-[`docs/CURATOR.md`](docs/CURATOR.md) so they don't have to be rediscovered.
-
-Guiding rule: everything tool-specific lives in `bio-tools/<tool>/`; the harnesses are
-tool-agnostic. **Adding a tool = fill `bio-tools/<tool>/manifest.yml` + `clean/<section>.yml` (the
-curator can auto-write the fact sections) + register a parser** (see
-[`docs/ADD_A_TOOL.md`](docs/ADD_A_TOOL.md)). Adding a QC check = add a metric row to an expectation
-table. No harness/track code changes for either.
-
-## Setup
+## Try it (2 minutes)
 
 ```bash
-conda activate nooa                      # env that provides nooa==0.0.8
-pip install -r requirements.txt          # langgraph, langchain-core, pyyaml, jsonschema, requests
+conda activate nooa                      # the project env (see docs/DEVELOPING.md to build it)
+pip install -r requirements.txt          # fastapi + uvicorn + mcp[cli] + langgraph + deps
 mamba install -c bioconda fastqc         # FastQC 0.12.x
-ollama serve &                           # local model server
-export OLLAMA_MODEL=qwen2.5vl:7b         # any local model works
-bash shared/data/fetch_virus_fastq.sh    # download + subsample the test FASTQ
+bash shared/data/fetch_virus_fastq.sh    # a small SARS-CoV-2 test FASTQ
+python -m app                            # http://127.0.0.1:8000  — the chat opens here
 ```
 
-## Run — the chat app (start here)
+`python -m app` drops you into a chat. With a model reachable it uses the **agent** — the local
+`claude` CLI (your subscription, no API key) if installed, else Ollama — which drives the harness as
+tools; only `run_tool` executes anything. With no model it falls back to a deterministic router, so it
+still works offline. Try:
 
-```bash
-pip install -r requirements.txt          # adds fastapi + uvicorn + mcp[cli]
-python -m app                            # http://127.0.0.1:8000  (--port / --model / --workdir)
-```
+- *"run fastqc on `shared/data/SRR11140744_10k.fastq.gz`"* → watch it onboard → judge → run → evaluate.
+- *"assess these reads and give me the overall cohort quality conclusion"* → watch it **refuse before
+  compute** (FastQC is not a cohort-QC tool — a must-not-use boundary).
 
-`python -m app` drops you into the chat. When a model is reachable it uses the **agent**: a capable
-model — the local `claude` CLI if installed (uses your subscription, no API key), else Ollama —
-drives the harness as tools. The model can inspect and query your data folder and run outputs and
-*request* tools, but the **only** way to execute a bioinformatics tool is `run_tool`, which
-self-guards (onboarding → judgment → refuse|run → evaluate|diagnose) — no shell is ever exposed to
-the model. With **no model reachable**, chat falls back to a deterministic regex router, so it still
-works offline (profile a FASTQ, run a tool, inspect the folder). Open it **in your data folder** with
-the `bin/abi` launcher — see Chat UI below.
+External clients (Claude Desktop/Code) can drive the same harness over stdio:
+`python -m mcp_server.server`.
 
-## Chat UI
+## Status — early, and honest about it
 
-A split-screen web app (chat left, ground-truth **facts + plots** right) is the interactive front
-end. A capable model drives the harness as tools (agent mode); with no model, a deterministic regex
-router handles common requests. Either way the model routes and narrates — deterministic code
-produces every fact, and only `run_tool` executes anything.
+FastQC and MultiQC are the first two tools; the durable contribution is the **pattern** — machine-
+readable biological contracts + a server-enforced refusal gate — not the tool count. The **benchmark
+is the deliverable in progress**: a committed suite ([`tests/REPORT.md`](tests/REPORT.md)) already
+scores each failure mode as a fixture (happy path, precondition refusal, must-not-use refusal,
+anomaly, known-crash diagnosis, novel-crash escalation); next is adversarial cases, null-model
+controls, and per-checkpoint precision/recall on whether each check catches what it claims to.
 
-**Open the app in your data folder.** Data paths resolve against a **working directory** that
-defaults to where you launched the app (a bare filename or relative path is looked up there, with
-`shared/data/` as a fallback for the demo files). The `bin/abi` launcher opens the app "in" whatever
-folder you're standing in — put `bin/` on your `PATH` or symlink it:
+## More
 
-```bash
-ln -s "$(pwd)/bin/abi" ~/.local/bin/abi   # once
-cd /path/to/my/run && abi                 # opens the app with that folder as the working directory
-```
-
-From chat you can inspect or change it: *"what's in my folder?"* lists the data files grouped by
-type; *"my data is in /path/to/run"* (or *"set my working directory to …"*) switches it. The active
-folder shows in the header and is available at `GET/POST /api/workdir`.
-
-Ask *"what can you tell me about `shared/data/SRR11140744_10k.fastq.gz`"* → the right panel fills with
-the measured facts (format, read-length min/max/mode, Phred encoding, SE/PE hint), a read-length
-histogram, and per-position quality. Pick **Ollama** or **Claude** in the model dropdown (Claude uses
-your local `claude` login — no API key).
-
-What it can do (agent tools, and the deterministic fallback covers the same common asks):
-
-- **inspect/query the folder** — *"what data do I have?"*, read a file's head, profile a FASTQ
-  (facts + read-length/quality plots).
-- **run tools through the harness** — *"run fastqc on each of the snf2 files"*, *"run rustqc on the
-  output"*; every run streams its stages and only `run_tool` executes. The HTML report (FastQC/MultiQC)
-  opens in the **Report** tab.
-- **chain tools** — inspect run **outputs** (`list_outputs`) and feed one tool's output into the next.
-- **explain / find tools** — *"tell me about fastqc"*, *"which tool takes fastq?"*.
-- **add a tool** — install + document a new tool via the curator (HRR-gated: documented but not
-  runnable until a human reviews the safety contract).
-- **recall this session** — *"where did I write the fastqc output?"*; runs persist to
-  `~/.bio_chat/sessions/`, and the **session picker** reloads a past session.
-
-The model routes and narrates; deterministic code produces every fact, so the app still catches real
-problems with the model off. Pick **Ollama** or **Claude** in the model dropdown; the header shows the
-active brain (`agent · claude` / `deterministic`).
-
-### MCP server (external clients)
-
-Point an external client (Claude Desktop/Code, or a local-model agent) at the same harness over stdio
-— the same self-guarding `run_tool`, no shell exposed:
-
-```bash
-python -m mcp_server.server              # stdio; register with your MCP client (mcp[cli]==2.0.0)
-```
-
-Design notes + the trust-boundary discussion: [`docs/mcp/`](docs/mcp/) (start with
-[`docs/mcp/PLAN.md`](docs/mcp/PLAN.md)). Full picture:
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#the-mcp-re-exposure--agent-loop-the-model-driven-surface).
-
-## Advanced / research: compare LangGraph vs NOOA
-
-The app and MCP server run the harness via `shared/pipeline.py`. The original research question —
-LangGraph vs NOOA as orchestration frameworks (see [`docs/COMPARISON.md`](docs/COMPARISON.md)) — is
-exercised through the two per-track CLIs, which sequence the *same* `shared/` harness two ways:
-
-```bash
-# a QC run, either track
-python -m langgraph_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
-    --question "QC these Illumina SARS-CoV-2 RNA-seq reads before trimming"
-python -m nooa_impl.run     --fastq shared/data/SRR11140744_10k.fastq.gz \
-    --question "QC these Illumina SARS-CoV-2 RNA-seq reads before trimming"
-
-# a refusal (judgment stops it before compute)
-python -m langgraph_impl.run --fastq shared/data/SRR11140744_10k.fastq.gz \
-    --question "Assess these reads" \
-    --deliverable "give me the overall cohort quality conclusion across all samples"
-
-# a second tool (MultiQC) — point it at a directory of tool reports
-python -m langgraph_impl.run --tool multiqc --fastq <dir_of_fastqc_reports> \
-    --question "aggregate the FastQC reports for this run"
-```
-
-Both tracks degrade gracefully with Ollama off (they report `llm_provider: null`).
-
-## Tests
-
-```bash
-python tests/run_tests.py          # deterministic (no LLM) — writes tests/REPORT.md, exits nonzero on failure
-python tests/run_tests.py --llm    # also runs the LLM-dependent boundary-refusal case
-```
-
-`tests/REPORT.md` is a committed markdown table of every case × both tracks (happy / refusal /
-precondition-block / anomaly / diagnosis / MultiQC). Fixtures are in `tests/inputs/`.
-
-## Two changelogs
-
-Each track keeps its own changelog so the divergence in orchestration effort is visible over time:
-[`langgraph_impl/CHANGELOG.md`](langgraph_impl/CHANGELOG.md) ·
-[`nooa_impl/CHANGELOG.md`](nooa_impl/CHANGELOG.md).
-
----
-
-_Resuming work on this repo? [`docs/SESSION_HANDOFF.md`](docs/SESSION_HANDOFF.md) has env setup,
-resume commands, and prioritized next steps._
+- **Architecture + the trust boundary** — [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- **Developing** — repo layout, adding a tool, the curator, the LangGraph↔NOOA comparison, and tests:
+  [`docs/DEVELOPING.md`](docs/DEVELOPING.md)
+- **Built two ways** (LangGraph + NOOA) on one shared core, for an honest framework comparison —
+  [`docs/COMPARISON.md`](docs/COMPARISON.md)
+- **Design notes** (the MCP pivot + the trust-boundary discussion) — [`docs/mcp/PLAN.md`](docs/mcp/PLAN.md)
