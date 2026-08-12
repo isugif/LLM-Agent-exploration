@@ -85,19 +85,25 @@ temp/           scratch only (gitignored): original sketches, images
   fix); autonomous install gate. See CURATOR.md for the tables.
 - **Trait composition** — runtime traits compose into contracts (fastqc inherits Java OOM→`-Xmx`);
   biology/domain knowledge library recorded (consumption deferred).
+- **MCP re-exposure + agent loop** (the path forward) — `shared/pipeline.py` order-guard +
+  `shared/harnesses/*`; a stdio MCP server (`mcp_server/server.py`) and a model-agnostic agent loop
+  (`app/agent_loop.py`, opt-in `agent` flag) drive the harness as tools; only `run_tool` executes, no
+  shell exposed. **Phased plan + current status: [`mcp/PLAN.md`](mcp/PLAN.md).**
 
-## Logical next steps (prioritized — from BACKLOG)
+## Logical next steps (prioritized)
 
-1. **Data-trait consumption** (three pillars, highest value): classify platform/organism-domain at
-   onboarding → attach traits to the spec → judgment cross-check (e.g. short-read aligner × Nanopore →
-   refuse) → surface `considerations` in results-evaluation. Add `platform` traits.
-2. **First hybrid + framework edges:** build the **human-curation loop** with LangGraph
-   `interrupt()`/checkpoint (its edge) + a NOOA `CodeAct` compose node (NOOA's edge). This is where the
-   framework difference finally shows.
-3. **Judgment "retrieve & match"** — auto-select the tool by ranking contracts (vs `--tool`).
-4. **Batch multi-section transfer** — one prompt for all sections → ~4× token cut (see CURATOR.md).
-5. **Cutover follow-ups** — render workbook from clean source; on-demand `install.yml` in diagnosis;
-   refresh ADD_A_TOOL/ARCHITECTURE; propose→approve drafts for HRR machine sections.
+**Active path — MCP + agent loop (see [`mcp/PLAN.md`](mcp/PLAN.md) for detail):**
+1. Validate agent-loop quality with a real model (Claude CLI / Ollama) on multi-file + tool-chaining
+   tasks; then **flip agent mode to default** and retire `app/intent.py` + `app/resolve.py`.
+2. **Archive** `langgraph_impl/` + `nooa_impl/` from the hot path (once `run_pipeline`/`run_tests.py`
+   no longer import them); add the server-side **run state machine** (resume + HRR pause).
+3. **Phase C** — interactive experiment-document contract (multi-file declared-vs-measured reconcile).
+
+**Still-relevant from BACKLOG:**
+4. **Data-trait consumption** (three pillars): classify platform/organism-domain at onboarding →
+   attach traits → judgment cross-check (short-read aligner × Nanopore → refuse).
+5. **Judgment "retrieve & match"** — auto-select the tool by ranking contracts (vs `--tool`).
+6. **Batch multi-section transfer** (curator) — one prompt for all sections → ~4× token cut.
 
 ## Continuity risks / notes
 
@@ -105,7 +111,8 @@ temp/           scratch only (gitignored): original sketches, images
   correctly in `curator-tools`. Harmless, but tidy `nooa` if desired.
 - **git push shows a spurious "fast-forward" hint** in this setup — pushes actually land (verify with
   `git rev-parse HEAD` vs `origin/<branch>`).
-- Branch: `feat/fastqc-four-harness-slice` (all work here; not merged to `main`).
+- Branch/state: the MCP + agent-loop work (Phase A+B core) is **merged to `main`**. Resume new work
+  on a fresh branch (never commit on `main`). The `Agentic-Bioinformatics-Scientist` branch is merged.
 
 ## Acknowledgments
 
