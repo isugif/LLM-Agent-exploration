@@ -85,18 +85,20 @@ temp/           scratch only (gitignored): original sketches, images
   fix); autonomous install gate. See CURATOR.md for the tables.
 - **Trait composition** — runtime traits compose into contracts (fastqc inherits Java OOM→`-Xmx`);
   biology/domain knowledge library recorded (consumption deferred).
-- **MCP re-exposure + agent loop** (the path forward) — `shared/pipeline.py` order-guard +
-  `shared/harnesses/*`; a stdio MCP server (`mcp_server/server.py`) and a model-agnostic agent loop
-  (`app/agent_loop.py`, opt-in `agent` flag) drive the harness as tools; only `run_tool` executes, no
-  shell exposed. **Phased plan + current status: [`mcp/PLAN.md`](mcp/PLAN.md).**
+- **MCP re-exposure + agent loop** (the path forward, now the DEFAULT) — `shared/pipeline.py`
+  order-guard + `shared/harnesses/*`; a stdio MCP server (`mcp_server/server.py`) and a model-agnostic
+  agent loop (`app/agent_loop.py`) drive the harness as tools; only `run_tool` executes, no shell
+  exposed. Chat routes to the agent when a model is reachable (Claude CLI preferred, else Ollama), else
+  a deterministic `resolve.py` fallback. The LLM classifier (`app/intent.py`) is retired.
+  **Phased plan + current status: [`mcp/PLAN.md`](mcp/PLAN.md).**
 
 ## Logical next steps (prioritized)
 
 **Active path — MCP + agent loop (see [`mcp/PLAN.md`](mcp/PLAN.md) for detail):**
-1. Validate agent-loop quality with a real model (Claude CLI / Ollama) on multi-file + tool-chaining
-   tasks; then **flip agent mode to default** and retire `app/intent.py` + `app/resolve.py`.
-2. **Archive** `langgraph_impl/` + `nooa_impl/` from the hot path (once `run_pipeline`/`run_tests.py`
-   no longer import them); add the server-side **run state machine** (resume + HRR pause).
+1. **Validate agent-loop quality** with a real model (Claude CLI / Ollama) on multi-file +
+   tool-chaining tasks; tighten the system prompt if it mis-picks files.
+2. Add the server-side **run state machine** (resume + HRR pause). LangGraph/NOOA are **kept** for the
+   framework comparison (demoted in the README), not archived.
 3. **Phase C** — interactive experiment-document contract (multi-file declared-vs-measured reconcile).
 
 **Still-relevant from BACKLOG:**

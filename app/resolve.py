@@ -18,7 +18,28 @@ Operates on an intent duck-typed as having `.intent`, `.tool`, `.files` (avoids 
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field
+
+# The typed intent the deterministic router grounds. Formerly produced by an LLM classifier
+# (app/intent.py, retired): when a model is present the agent loop handles routing; with no model,
+# `resolve()` grounds a bare Intent() from deterministic signals, so the chat still works offline.
+IntentName = Literal["describe_data", "explain_tool", "find_tool", "session_query",
+                     "propose_strategy", "run_pipeline", "add_tool",
+                     "describe_workdir", "set_workdir", "other"]
+
+
+class Intent(BaseModel):
+    """Typed classification of a chat message, then grounded in place by `resolve()`."""
+    intent: IntentName = "other"
+    files: list[str] = Field(default_factory=list, description="data file paths mentioned")
+    assay: str = "unknown"
+    organism: str = "unknown"
+    goal: str = "unknown"
+    tool: str = "unknown"
+    confidence: float = 0.0
+
 
 FASTQ_RE = re.compile(r"\S+\.(?:fastq|fq)(?:\.gz)?", re.IGNORECASE)
 # a reference FASTA path; the negative lookahead stops '.fa' from matching inside '.fastq'
@@ -279,3 +300,16 @@ def ask_text(slot: str) -> str:
     if slot == "file":
         return "Which FASTQ file? Give me a path (e.g. shared/data/SRR11140744_10k.fastq.gz)."
     return "Could you clarify that?"
+
+
+STUB_CAPABILITIES = {
+    "propose_strategy": "propose an analysis strategy for your data",
+}
+
+
+def stub_text(intent) -> str:
+    """Friendly 'not wired yet' message for intents beyond the deterministic router's capabilities."""
+    want = STUB_CAPABILITIES.get(intent.intent, "handle that")
+    return (f"I recognized that you'd like to **{want}** — that capability isn't wired up in the "
+            f"deterministic fallback. Connect a model (Claude/Ollama) for the full agent, or try "
+            f"\"tell me about fastqc\" / \"profile <file>.fastq.gz\".")

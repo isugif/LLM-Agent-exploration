@@ -6,6 +6,28 @@ changelog so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.5.0] — 2026-08-12
+
+The chat app becomes the front door and the agent loop becomes the default brain. LangGraph/NOOA are
+kept for the framework comparison (demoted below the chat headline in the README), not archived.
+Parity gate unchanged (14 pass / 0 fail).
+
+### Changed
+- app: `POST /api/chat` now defaults to the **agent loop** whenever a model is reachable (Claude CLI
+  preferred via `_chat_provider`, else Ollama); with no model it falls back to the deterministic
+  `app/resolve.py` regex router, so chat still works offline. The `agent` request flag + UI checkbox
+  are removed; the header shows the active brain.
+- app: the LLM intent classifier `app/intent.py` is **retired**; its `Intent` model + `stub_text`
+  moved into `app/resolve.py` (which stays as the offline router).
+- README reframed: `python -m app` (chat) is the headline; the per-track CLIs move to an
+  "Advanced / research: compare LangGraph vs NOOA" section.
+
+### Added
+- app: `describe_data` / `session_query` / `add_tool` (curator) as agent tools, reusing the existing
+  capability modules.
+- app: `app/stage_render.py` — framework-free stage-render helpers (`to_event`/`PLAN`/`summary_line`)
+  lifted out of `app/capabilities/run_pipeline.py`, so the agent path no longer imports LangGraph.
+
 ## [0.4.0] — 2026-08-12
 
 MCP re-exposure + a model-agnostic agent loop. The harness becomes a tool surface a capable client

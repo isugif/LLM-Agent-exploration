@@ -23,9 +23,7 @@
             <option value="claude">Claude</option>
           </select>
         </label>
-        <label class="prov ck" title="agent mode: the model drives via the harness tool-loop (folder inspect + probe + run_tool gate) instead of the legacy intent router">
-          <input type="checkbox" id="agent-mode" /> agent
-        </label>
+        <span id="brain" class="brainhint" title="active brain: the agent loop when a model is reachable, else the deterministic router"></span>
         <details class="settings" id="settings">
           <summary title="local training-data collection">⚙ data</summary>
           <div class="settings-body">

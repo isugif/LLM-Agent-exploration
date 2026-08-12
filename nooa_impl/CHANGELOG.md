@@ -6,6 +6,21 @@ so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.5.0] — 2026-08-12
+
+App-layer change: the chat app becomes the front door and the agent loop is the default brain (no
+model → deterministic `app/resolve.py` fallback; the LLM classifier `app/intent.py` is retired). **No
+NOOA track code changed**; NOOA/LangGraph are kept for the framework comparison (demoted in the
+README), not archived. Parity gate unchanged (14 pass / 0 fail).
+
+### Changed
+- app: `POST /api/chat` defaults to the agent loop when a model is reachable; the `agent` flag + UI
+  checkbox are removed. `app/intent.py` retired (`Intent`+`stub_text` moved to `app/resolve.py`).
+
+### Added
+- app: `describe_data`/`session_query`/`add_tool` agent tools; `app/stage_render.py` (framework-free
+  render helpers) so the agent path no longer imports LangGraph.
+
 ## [0.4.0] — 2026-08-12
 
 Shared-layer additions for the MCP re-exposure + agent loop. **No NOOA track code changed**; the

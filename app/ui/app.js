@@ -156,6 +156,8 @@ function applyEvent(event, data, ctx, replay) {
     const what = m.mode === "agent" ? "mode: agent" : `intent: ${m.intent}`;
     addActivity(`${what} · model: ${m.provider}`, "meta");
     term(`[meta] ${what} model=${m.provider}`);
+    const brain = $("brain");
+    if (brain) brain.textContent = m.mode === "agent" ? `🧠 agent · ${m.provider}` : "🧠 deterministic";
   } else if (event === "plan") {
     ctx.planSteps = JSON.parse(data).steps;
     if (!replay) setProgressTotal(ctx.planSteps.length);
@@ -191,12 +193,12 @@ function applyEvent(event, data, ctx, replay) {
   }
 }
 
-async function send(message, file, provider, signal, history, agent) {
+async function send(message, file, provider, signal, history) {
   const resp = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, file: file || null, provider, history: history || [],
-                           session_id: sid, agent: !!agent }),
+                           session_id: sid }),
     signal,
   });
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
@@ -644,7 +646,6 @@ $("composer").addEventListener("submit", async (e) => {
   const msg = $("message").value.trim();
   if (!msg) return;
   const provider = $("provider").value;
-  const agent = $("agent-mode").checked;
   inputHistory.push(msg);
   inputHistIdx = -1;
   addMsg(msg, "user");
@@ -655,7 +656,7 @@ $("composer").addEventListener("submit", async (e) => {
   convo.push({ role: "user", content: msg });
   inFlight = true; setStopMode(true);
   abortCtrl = new AbortController();
-  try { await send(msg, null, provider, abortCtrl.signal, history, agent); }
+  try { await send(msg, null, provider, abortCtrl.signal, history); }
   catch (err) {
     if (err.name === "AbortError") { addActivity("stopped by user", "err"); }
     else { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }

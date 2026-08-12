@@ -7,10 +7,11 @@ arbitrary code / no writes outside a run's out_dir is ever offered.
 
 Driven through `provider.extract(AgentAction, ...)` — the one primitive BOTH OllamaProvider and
 ClaudeCLIProvider already implement — so the loop is model-agnostic and needs no native tool-calling
-API. Under NullProvider (no LLM reachable) it degrades to a clear message rather than guessing.
+API.
 
-Phase B, additive: reachable via POST /api/chat with `"agent": true`. The legacy intent/resolve path
-stays the default until this proves out, then becomes the default and intent/resolve are retired.
+This is the DEFAULT chat brain whenever a model is reachable (Claude CLI preferred, else Ollama).
+With no model, POST /api/chat falls back to the deterministic regex router (app/resolve.py); the
+retired LLM classifier (app/intent.py) is gone.
 """
 
 from __future__ import annotations
@@ -29,8 +30,8 @@ from shared.probes.aln_probe import probe_alignment as _aln_probe
 from shared.probes.report_dir_probe import probe_report_dir as _report_dir_probe
 from shared.llm.provider import NullProvider
 from app import workdir
+from app import stage_render
 from app.session import STORE
-from app.capabilities import run_pipeline as run_pipeline_cap
 
 _REPO_DATA = Path(__file__).resolve().parents[1] / "shared" / "data"
 MAX_STEPS = 10             # headroom for inspect + run_tool across several files; guards stop earlier
@@ -158,16 +159,16 @@ def _t_list_outputs(args, ctx):
 def _run_tool_stage_events(result: dict) -> Iterator[tuple[str, dict]]:
     """Rebuild the UI staged events from a shared/pipeline result, reusing run_pipeline.to_event so
     the Activity panel looks identical — but sourced from shared/pipeline (no LangGraph)."""
-    yield "stage", run_pipeline_cap.to_event("onboarding",
+    yield "stage", stage_render.to_event("onboarding",
                                              {"measured": result.get("measured", {}), "spec": result.get("spec", {})})
-    yield "stage", run_pipeline_cap.to_event("judgment", {"route": result.get("route", {})})
+    yield "stage", stage_render.to_event("judgment", {"route": result.get("route", {})})
     if result.get("run_result") is not None:
-        yield "stage", run_pipeline_cap.to_event("execute", {"run_result": result["run_result"]})
+        yield "stage", stage_render.to_event("execute", {"run_result": result["run_result"]})
         last = result.get("trace", [])[-1] if result.get("trace") else None
         if last == "evaluation":
-            yield "stage", run_pipeline_cap.to_event("evaluation", {"verdict": result.get("verdict", {})})
+            yield "stage", stage_render.to_event("evaluation", {"verdict": result.get("verdict", {})})
         elif last == "diagnosis":
-            yield "stage", run_pipeline_cap.to_event("diagnosis", {"verdict": result.get("verdict", {})})
+            yield "stage", stage_render.to_event("diagnosis", {"verdict": result.get("verdict", {})})
 
 
 def _t_run_tool(args, ctx):
@@ -194,7 +195,7 @@ def _t_run_tool(args, ctx):
     verdict = (result.get("verdict") or {}).get("status")
     metrics = (result.get("verdict") or {}).get("metrics", {}) or {}
     findings = (result.get("verdict") or {}).get("findings", []) or []
-    events: list = [("plan", {"steps": run_pipeline_cap.PLAN})]
+    events: list = [("plan", {"steps": stage_render.PLAN})]
     for name, ev in _run_tool_stage_events(result):
         events.append((name, ev))
     STORE.append_run(ctx["sid"], {"tool": tool, "question": ctx["message"], "file": path,
@@ -202,11 +203,55 @@ def _t_run_tool(args, ctx):
                                   "action": action, "verdict_status": verdict,
                                   "metrics": metrics, "findings": findings})
     done[key] = {"path": path, "route": action, "verdict": verdict}
-    events.append(("log", {"text": run_pipeline_cap.summary_line(action, verdict, tool)}))
+    events.append(("log", {"text": stage_render.summary_line(action, verdict, tool)}))
     observation = {"route": action, "verdict": verdict, "findings": findings, "out_dir": out_dir,
                    "trace": result.get("trace"),
                    "completed": [d["path"] for d in done.values()], "available_fastq": _fastq_names()}
     return events, observation
+
+
+def _t_describe_data(args, ctx):
+    """Rich FASTQ profile (measured facts + read-length/quality plots) — the describe_data capability
+    as an agent tool. Deterministic; the agent narrates from the returned facts."""
+    from app.capabilities import describe_data as cap
+    path = workdir.resolve_path(args.get("path", "")) or args.get("path", "")
+    out = cap.run(args.get("question") or f"profile {path}", path, NullProvider())
+    panel = out.get("panel")
+    events = [("panel", panel)] if panel else []
+    obs = {"facts": (panel or {}).get("facts"), "disagreements": (panel or {}).get("disagreements")}
+    return events, obs
+
+
+def _t_session_query(args, ctx):
+    """Natural-language recall over this session's runs (where an output went, what a verdict was)."""
+    from app.capabilities import session_query as cap
+    out = cap.run(args.get("query") or ctx["message"], ctx["sid"], NullProvider())
+    panel = out.get("panel")
+    events = [("panel", panel)] if panel else []
+    return events, {"answer": out.get("prose"), "panel_kind": (panel or {}).get("kind")}
+
+
+def _t_add_tool(args, ctx):
+    """Install + document a new tool via the curator (HRR-gated: documented but NOT runnable until a
+    human reviews its safety contract). Streams the curator stages."""
+    from app.capabilities import add_tool as cap
+    tool = (args.get("tool") or "").strip().lower()
+    events: list = [("plan", {"steps": cap.plan_for(tool)})]
+    installed, version, markers, created, already = False, None, 0, [], False
+    for stage, data in cap.stage_events(tool, ctx.get("provider_name") or "auto"):
+        if stage == "provision":
+            installed, version = data.get("installed", False), data.get("version")
+        elif stage == "docs_check":
+            already = not data.get("missing")
+        elif stage == "curate" and data.get("status") == "valid":
+            created.append(data.get("section"))
+        elif stage == "hrr_gate":
+            markers = data.get("markers", 0)
+        events.append(("stage", cap.to_event(stage, data)))
+    events.append(("log", {"text": cap.summary_line(tool, installed, version, markers, created, already)}))
+    obs = {"installed": installed, "version": version, "hrr_markers": markers, "sections_created": created,
+           "note": "documented but NOT runnable until a human reviews the HRR_ machine sections"}
+    return events, obs
 
 
 TOOLS: dict[str, tuple[str, Any]] = {
@@ -215,9 +260,13 @@ TOOLS: dict[str, tuple[str, Any]] = {
                      "this to chain tools — feed one tool's output into the next. No args.", _t_list_outputs),
     "read_file": ("Read the head of a text file in the working folder. args: path, [max_bytes]. Read-only.", _t_read_file),
     "probe_data": ("Measured facts about a data path (FASTQ / alignment / report dir). args: path.", _t_probe_data),
+    "describe_data": ("Rich FASTQ profile: measured facts + read-length/quality plots. args: path.", _t_describe_data),
     "list_catalog": ("List/filter documented tools. args (all optional): category, input_format, text.", _t_list_catalog),
     "explain_tool": ("Curated facts about one documented tool. args: tool.", _t_explain_tool),
     "find_tool": ("Find candidate tools for a need. args: query.", _t_find_tool),
+    "session_query": ("Recall this session's past runs (where output went, what a verdict was). args: query.", _t_session_query),
+    "add_tool": ("Install + document a NEW tool via the curator (HRR-gated; documented but not runnable "
+                 "until human-reviewed). args: tool.", _t_add_tool),
     "run_tool": ("THE only way to run a bioinformatics tool. Self-guards (onboarding+judgment) and may "
                  "REFUSE. args: tool, path, [question], [reference], [annotation].", _t_run_tool),
 }

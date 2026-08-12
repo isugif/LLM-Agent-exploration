@@ -116,8 +116,11 @@ switched off. The LLM sharpens judgment; it is never the thing that decides pass
 ## The chat app (`app/`)
 
 A split-screen web app (FastAPI + a vanilla-JS UI) is the interactive front end over the same
-shared core. Free-text messages are classified into a typed **Intent** and dispatched by
-deterministic code — the LLM routes and narrates, it never produces the facts. Wired capabilities:
+shared core. When a model is reachable the **agent loop** drives (below); with no model, a
+deterministic **regex router** (`app/resolve.py`) grounds a bare Intent and dispatches, so the chat
+still works offline. The LLM classifier that used to sit in front is retired. Either way the model
+only routes and narrates; deterministic code produces the facts. Capabilities (agent tools, mirrored
+by the deterministic fallback):
 
 - **describe_data** — probe a FASTQ and show measured facts + read-length / quality plots.
 - **explain_tool** — answer about one documented tool, grounded in its `clean/` sections + live `--help`.
@@ -131,9 +134,10 @@ deterministic code — the LLM routes and narrates, it never produces the facts.
 
 ## The MCP re-exposure + agent loop (the model-driven surface)
 
-The hand-built intent router (`app/intent.py` + `app/resolve.py`) re-implements what a capable agent
-does natively — intent, slot-filling, follow-ups, clarification, memory. It is being replaced by
-letting the model *drive the harness as tools*. Two commitments keep that safe rather than a bypass:
+The hand-built LLM intent classifier (`app/intent.py`) re-implemented what a capable agent does
+natively — intent, slot-filling, follow-ups, memory — so it was **retired**; the model now *drives
+the harness as tools*, and `app/resolve.py`'s deterministic regex router remains only as the no-model
+fallback. Two commitments keep the agent safe rather than a bypass:
 
 - **One execution gate, made explicit.** `shared/pipeline.py` is the sole path that runs a tool
   (`onboard → judge → refuse | run → evaluate | diagnose`). It refuses before compute exactly as
@@ -145,19 +149,20 @@ letting the model *drive the harness as tools*. Two commitments keep that safe r
 
 Two client surfaces sit over the same `shared/` core:
 
-- **Web UI agent mode** — `app/agent_loop.py`, behind the `agent` flag on `POST /api/chat`. A
-  provider-driven tool-use loop over `provider.extract(AgentAction, …)` (model-agnostic: Ollama or
-  the Claude CLI, no native tool-calling API required). Tools: read-only `list_workdir` /
-  `list_outputs` / `read_file` / `probe_data`, contract knowledge (`list_catalog` / `explain_tool` /
-  `find_tool`), and the `run_tool` gate. `run_tool` is idempotent per turn and a repeat guard stops
-  runaway loops. The legacy intent/resolve path stays the default until agent mode is proven.
+- **Web UI agent mode** — `app/agent_loop.py`, the **default** on `POST /api/chat` whenever a model is
+  reachable (Claude CLI preferred, else Ollama; no model → the deterministic fallback). A
+  provider-driven tool-use loop over `provider.extract(AgentAction, …)` (model-agnostic, no native
+  tool-calling API required). Tools: read-only `list_workdir` / `list_outputs` / `read_file` /
+  `probe_data` / `describe_data`, contract knowledge (`list_catalog` / `explain_tool` / `find_tool` /
+  `session_query` / `add_tool`), and the `run_tool` gate. `run_tool` is idempotent per turn and a
+  repeat guard stops runaway loops.
 - **Stdio MCP server** — `mcp_server/server.py` (`mcp[cli]==2.0.0`). Exposes the same harness as MCP
   tools so an external client (Claude Desktop/Code, or a local-model agent) supplies the
   intelligence, with the same self-guarding `run_tool`.
 
 ```
-        Web UI (agent mode)                      MCP client (Claude Desktop/Code)
-   POST /api/chat {agent:true}                          stdio (MCP)
+        Web UI (agent default)                   MCP client (Claude Desktop/Code)
+   POST /api/chat (model reachable)                     stdio (MCP)
                 │                                             │
                 ▼                                             ▼
      app/agent_loop.run_agent                   mcp_server/server.py  (9 tools)
