@@ -17,7 +17,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from shared import contracts_lib as cl
-from shared.harness_steps import build_route, review_gate
+from shared.harness_steps import build_route, review_gate, runnable_gate
 from shared.llm.provider import provider_by_name, NullProvider
 
 
@@ -64,6 +64,11 @@ def judge(*, tool: str, spec: dict, llm_provider: Optional[str] = None,
 
     # 0) human-review gate: refuse an un-vetted contract (HRR_ markers) before anything else.
     gate = review_gate(contract)
+    if gate is not None:
+        return {"route": gate.to_dict()}
+
+    # 0b) runnable gate: refuse a documented-but-not-runnable tool (no execution.argv) before compute.
+    gate = runnable_gate(contract)
     if gate is not None:
         return {"route": gate.to_dict()}
 

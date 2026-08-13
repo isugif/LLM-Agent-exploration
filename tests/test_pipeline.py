@@ -40,6 +40,16 @@ def test_run_pipeline_reuses_declared_facts():
     assert r["spec"]["declared"]["platform"] == "nanopore"
 
 
+def test_documented_but_not_runnable_refuses_before_compute():
+    """A tool documented for explain/find only (no machine execution section, e.g. hisat2) must refuse
+    at judgment with `not_runnable` — not fail later in the runner."""
+    r = pipeline.run_pipeline(tool="hisat2", fastq=GOOD, question="align these reads")
+    assert r["route"]["action"] == "refuse"
+    assert any("not_runnable" in f for f in r["route"]["precondition_failures"])
+    assert r["run_result"] is None and r["verdict"] is None
+    assert "execution" not in r["trace"]
+
+
 def test_refuse_short_circuits_before_compute():
     """minimap2 with no reference must refuse in judgment and never reach execution."""
     r = pipeline.run_pipeline(tool="minimap2", fastq=GOOD, reference=None,

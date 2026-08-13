@@ -52,6 +52,23 @@ def review_gate(contract: dict[str, Any]) -> Optional[RouteDecision]:
     )
 
 
+def runnable_gate(contract: dict[str, Any]) -> Optional[RouteDecision]:
+    """Refuse a documented-but-not-runnable tool (no machine execution section / argv) BEFORE compute,
+    instead of failing later in the runner. A tool curated for explain/find only carries context
+    sections; running it needs a machine execution contract."""
+    if contract.get("execution", {}).get("argv"):
+        return None
+    tid = contract.get("id", "this tool")
+    return RouteDecision(
+        action="refuse",
+        rationale=f"{tid} is documented but not runnable: its contract has no machine execution "
+                  f"section (argv). Add `bio-tools/{tid}/clean/execution.yml` (+ preconditions and a "
+                  f"parser) to run it.",
+        confidence=1.0,
+        precondition_failures=["not_runnable: no execution.argv"],
+    )
+
+
 def build_route(blocking: list[dict], confirmed: list[str],
                 boundary_notes: list[str], warnings: list[dict]) -> RouteDecision:
     """Compose the RouteDecision from precondition + boundary outcomes."""

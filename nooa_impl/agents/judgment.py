@@ -12,7 +12,8 @@ from nooa import Agent, strategy
 from nooa.strategies import PredictStrategy
 
 from shared import contracts_lib as cl
-from shared.harness_steps import build_route as _build_route, review_gate as _review_gate
+from shared.harness_steps import (build_route as _build_route, review_gate as _review_gate,
+                                  runnable_gate as _runnable_gate)
 from shared.models import RouteDecision
 
 
@@ -34,6 +35,10 @@ class JudgmentAgent(Agent):
     def review_gate(self) -> RouteDecision | None:
         """Refuse an un-vetted contract (HRR_ markers in machine sections) before anything else."""
         return _review_gate(self.contract)
+
+    def runnable_gate(self) -> RouteDecision | None:
+        """Refuse a documented-but-not-runnable tool (no execution.argv) before compute."""
+        return _runnable_gate(self.contract)
 
     def check_preconditions(self, declared: dict, measured: dict):
         blocking, warnings = cl.evaluate_preconditions(self.contract, declared, measured)
