@@ -1,6 +1,6 @@
 """`python -m app` — launch the chat UI.
 
-    python -m app [--host 127.0.0.1] [--port 8000] [--model qwen2.5vl:7b]
+    python -m app [--host 127.0.0.1] [--port 8000] [--model qwen3.6:35b-a3b]
 
 Provider is chosen per-request from the UI dropdown; --model sets the default Ollama model.
 """

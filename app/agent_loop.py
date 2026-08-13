@@ -56,16 +56,48 @@ def _probe_path(path: str) -> dict[str, Any]:
     return _fastq_probe(path)
 
 
-def _fastq_names() -> list[str]:
-    """FASTQ filenames in the working folder — surfaced to the model so it can pick the NEXT file to
-    run instead of guessing/fixating on one."""
+_LISTALL = 100000     # inspect() sample cap high enough to list EVERY file (matching needs the full set)
+
+
+def _workdir_groups() -> dict[str, list[str]]:
+    """All working-folder files grouped by kind (full lists — not the 8-file preview sample)."""
     try:
-        for g in workdir.inspect().get("groups", []):
-            if g.get("kind") == "fastq":
-                return g.get("files", [])
+        return {g["kind"]: g.get("files", [])
+                for g in workdir.inspect(sample=_LISTALL).get("groups", [])}
     except Exception:                             # noqa: BLE001
-        pass
-    return []
+        return {}
+
+
+def _fastq_names() -> list[str]:
+    """Every FASTQ filename in the working folder (surfaced to the model for continuity)."""
+    return _workdir_groups().get("fastq", [])
+
+
+def _takes_report_dir(tool: str) -> bool:
+    """True if the tool aggregates a DIRECTORY of reports (e.g. MultiQC) rather than a single file."""
+    from shared.tools.registry import PROBES
+    from shared.probes.report_dir_probe import probe_report_dir
+    return PROBES.get(tool) is probe_report_dir
+
+
+def _input_candidates(tool: str) -> list[str]:
+    """Working-folder files valid as INPUTS for this tool: alignments for alignment-consuming tools,
+    else FASTQs. Used to expand a pattern deterministically — the model never enumerates files."""
+    from shared.tools.registry import PROBES
+    from shared.probes.aln_probe import probe_alignment
+    groups = _workdir_groups()
+    if PROBES.get(tool) is probe_alignment:
+        return groups.get("alignment", [])
+    return groups.get("fastq", [])
+
+
+def _match_names(pattern: str, names: list[str]) -> list[str]:
+    """Deterministic file selection: fnmatch on the BASENAME (files may be listed as 'data/x.fastq.gz',
+    so an anchored glob like 'snf*.fastq.gz' must match the filename, not the dir prefix),
+    case-insensitive; a bare token like 'snf' -> '*snf*'."""
+    import fnmatch
+    pat = (pattern if any(c in pattern for c in "*?[") else f"*{pattern}*").lower()
+    return [n for n in names if fnmatch.fnmatch(os.path.basename(n).lower(), pat)]
 
 
 def _scoped_read(path: str, max_bytes: int = _READ_CAP) -> dict[str, Any]:
@@ -171,26 +203,50 @@ def _run_tool_stage_events(result: dict) -> Iterator[tuple[str, dict]]:
             yield "stage", stage_render.to_event("diagnosis", {"verdict": result.get("verdict", {})})
 
 
-def _t_run_tool(args, ctx):
-    tool = (args.get("tool") or "").strip().lower()
-    path = workdir.resolve_path(args.get("path", "")) or args.get("path", "")
+def _resolve_run_inputs(tool: str, args: dict, ctx: dict) -> tuple[list[str], str]:
+    """Deterministically resolve the input path(s) for a run_tool call — so the MODEL only expresses
+    intent (a pattern, or nothing for an aggregator) and the harness does the file selection."""
+    # aggregator tools consume a DIRECTORY of reports; default to this session's runs/ dir.
+    if _takes_report_dir(tool):
+        d = args.get("path") or args.get("dir")
+        d = workdir.resolve_path(d) if d else None
+        if not (d and os.path.isdir(d)):
+            d = str(STORE.runs_dir(ctx["sid"]))
+        return [d], f"aggregating reports in {d}"
+    # an explicit list of files
+    paths = args.get("paths")
+    if isinstance(paths, list) and paths:
+        return [workdir.resolve_path(p) or p for p in paths], f"{len(paths)} file(s) given"
+    # a pattern -> deterministic glob over the tool's valid inputs (runs EVERY match in one call)
+    pattern = (args.get("pattern") or "").strip()
+    if pattern:
+        matches = _match_names(pattern, _input_candidates(tool))
+        return ([workdir.resolve_path(m) or m for m in matches],
+                f"pattern '{pattern}' matched {len(matches)} file(s)")
+    # a single file
+    path = args.get("path")
+    if path:
+        return [workdir.resolve_path(path) or path], ""
+    return [], "no file, pattern, or paths given"
+
+
+def _run_one(tool: str, path: str, ctx: dict, question: str, reference=None, annotation=None,
+             declared=None, provider_name=None) -> tuple[list, dict]:
+    """Run ONE input through the gate, idempotent per turn. `declared` reuses already-extracted facts
+    (skips onboarding's LLM call — the batch cost saver). Returns (events, per-file result)."""
     done = ctx.setdefault("done", {})
     key = os.path.realpath(path)
-
-    # IDEMPOTENT: never re-execute a file already run this turn. A repeat is a no-op that tells the
-    # model what's finished and what's still available — so it advances instead of looping.
-    if key in done:
+    if key in done:                               # already ran this file this turn -> no-op
+        d = done[key]
         return ([("log", {"text": f"already ran {tool} on {Path(path).name}; not repeating"})],
-                {"skipped": path, "reason": "already ran this file this turn — pick another or finish",
-                 "completed": [d["path"] for d in done.values()], "available_fastq": _fastq_names()})
-
+                {"path": path, "route": d["route"], "verdict": d["verdict"], "skipped": True,
+                 "declared": d.get("declared"), "llm_provider": d.get("llm_provider")})
     out_dir = str(STORE.run_dir(ctx["sid"], tool))
     result = pipeline.run_pipeline(
-        tool=tool, fastq=path, question=args.get("question") or ctx["message"],
-        reference=workdir.resolve_path(args.get("reference")),
-        annotation=workdir.resolve_path(args.get("annotation")),
-        out_dir=out_dir, provider=ctx["provider_name"])
-
+        tool=tool, fastq=path, question=question,
+        reference=workdir.resolve_path(reference), annotation=workdir.resolve_path(annotation),
+        out_dir=out_dir, provider=provider_name or ctx["provider_name"],
+        provider_model=ctx.get("provider_model"), declared=declared)
     action = result.get("route", {}).get("action")
     verdict = (result.get("verdict") or {}).get("status")
     metrics = (result.get("verdict") or {}).get("metrics", {}) or {}
@@ -202,11 +258,50 @@ def _t_run_tool(args, ctx):
                                   "out_dir": out_dir, "out_name": Path(out_dir).name,
                                   "action": action, "verdict_status": verdict,
                                   "metrics": metrics, "findings": findings})
-    done[key] = {"path": path, "route": action, "verdict": verdict}
+    done[key] = {"path": path, "route": action, "verdict": verdict,
+                 "declared": result.get("declared"), "llm_provider": result.get("llm_provider")}
     events.append(("log", {"text": stage_render.summary_line(action, verdict, tool)}))
-    observation = {"route": action, "verdict": verdict, "findings": findings, "out_dir": out_dir,
-                   "trace": result.get("trace"),
-                   "completed": [d["path"] for d in done.values()], "available_fastq": _fastq_names()}
+    return events, {"path": path, "route": action, "verdict": verdict, "findings": findings,
+                    "out_dir": out_dir, "declared": result.get("declared"),
+                    "llm_provider": result.get("llm_provider")}
+
+
+def _batch_summary(tool: str, ran: list[dict]) -> str:
+    if len(ran) == 1:
+        return stage_render.summary_line(ran[0]["route"], ran[0]["verdict"], tool)
+    parts = ", ".join(f"{Path(r['path']).name} ({r['route']}/{r['verdict'] or '—'})" for r in ran)
+    return f"Ran **{tool}** on {len(ran)} file(s): {parts}."
+
+
+def _t_run_tool(args, ctx):
+    """Run a tool on one file, a glob `pattern` (every match in ONE call), a `paths` list, or — for an
+    aggregator like multiqc — the session's run outputs by default. File selection is deterministic."""
+    tool = (args.get("tool") or "").strip().lower()
+    paths, note = _resolve_run_inputs(tool, args, ctx)
+    if not paths:
+        return ([("log", {"text": f"run_tool: {note}"})],
+                {"error": note, "available_fastq": _fastq_names()})
+    question = args.get("question") or ctx["message"]
+    events: list = [("log", {"text": f"→ {tool}: {note}"})] if note else []
+    ran: list[dict] = []
+    # Extract declared facts ONCE per batch: the first file's onboarding does the LLM call, the rest
+    # reuse its declared facts (same question) — so a 3-file batch is 1 onboarding LLM call, not 3.
+    declared_cache = None
+    prov_cache = ctx["provider_name"]
+    for p in paths:
+        evs, res = _run_one(tool, p, ctx, question, reference=args.get("reference"),
+                            annotation=args.get("annotation"),
+                            declared=declared_cache, provider_name=prov_cache)
+        events.extend(evs)
+        ran.append(res)
+        if declared_cache is None and res.get("declared") is not None:
+            declared_cache = res["declared"]                       # reuse for the remaining files
+            prov_cache = res.get("llm_provider") or prov_cache
+    events.append(("log", {"text": _batch_summary(tool, ran)}))
+    observation = {"ran": [{"file": Path(r["path"]).name, "route": r["route"], "verdict": r["verdict"]}
+                           for r in ran],
+                   "completed": [d["path"] for d in ctx.get("done", {}).values()],
+                   "available_fastq": _fastq_names()}
     return events, observation
 
 
@@ -268,7 +363,10 @@ TOOLS: dict[str, tuple[str, Any]] = {
     "add_tool": ("Install + document a NEW tool via the curator (HRR-gated; documented but not runnable "
                  "until human-reviewed). args: tool.", _t_add_tool),
     "run_tool": ("THE only way to run a bioinformatics tool. Self-guards (onboarding+judgment) and may "
-                 "REFUSE. args: tool, path, [question], [reference], [annotation].", _t_run_tool),
+                 "REFUSE. Give `tool` and ONE of: `path` (one file), `pattern` (e.g. 'snf' or "
+                 "'*.fastq.gz' — runs the tool on EVERY matching input file in a SINGLE call), or "
+                 "`paths` (list). Aggregators like multiqc need no path (they default to this session's "
+                 "run outputs). Optional: question, reference, annotation.", _t_run_tool),
 }
 
 _DEGRADED = ("No language model is reachable, so I can't drive the conversation. The deterministic "
@@ -290,11 +388,13 @@ def _system_prompt() -> str:
     lines += [
         "",
         "Rules:",
-        "  - If you don't know the exact filenames, call list_workdir FIRST to see them.",
-        "  - Call run_tool at most ONCE per file. Each run_tool observation lists `completed` (already "
-        "run) and `available_fastq` — never re-run a completed file; pick one not yet done.",
-        "  - When every requested file has been run (nothing relevant left in `available_fastq`), STOP: "
-        "set tool to null and put a short summary in `answer`. Do not keep calling tools.",
+        "  - If you don't know the filenames, call list_workdir FIRST.",
+        "  - To run a tool on MANY files (e.g. 'all snf files'), pass a `pattern` to run_tool ONCE — it "
+        "runs every match in a single call. Do NOT loop run_tool file-by-file.",
+        "  - Aggregators (e.g. multiqc) take no path — call run_tool with just the tool name; it "
+        "defaults to this session's run outputs.",
+        "  - When the request is satisfied, STOP: set tool to null and summarize in `answer`. Don't "
+        "re-run files already listed in `completed`.",
     ]
     return "\n".join(lines)
 
@@ -302,14 +402,16 @@ def _system_prompt() -> str:
 def run_agent(message: str, history: list[dict], provider, sid: str) -> Iterator[tuple[str, dict]]:
     """Drive the tool-use loop, yielding (sse_event_name, data) pairs. Terminal event is ('prose', …)
     followed by ('done', {}). SSE event names match the existing UI: log/meta/panel/plan/stage/prose."""
-    yield "meta", {"provider": getattr(provider, "name", "null"), "mode": "agent", "sid": sid}
+    yield "meta", {"provider": getattr(provider, "name", "null"),
+                   "model": getattr(provider, "model", None), "mode": "agent", "sid": sid}
     if isinstance(provider, NullProvider) or getattr(provider, "name", "null") == "null":
         yield "prose", {"text": _DEGRADED}
         yield "done", {}
         return
 
     system = _system_prompt()
-    ctx = {"sid": sid, "message": message, "provider_name": getattr(provider, "name", None), "done": {}}
+    ctx = {"sid": sid, "message": message, "provider_name": getattr(provider, "name", None),
+           "provider_model": getattr(provider, "model", None), "done": {}}
     transcript = _format_history(history)
     observations: list[str] = []
     seen: dict[str, int] = {}                     # action signature -> times proposed (loop guard)
@@ -319,8 +421,7 @@ def run_agent(message: str, history: list[dict], provider, sid: str) -> Iterator
         if observations:
             prompt += "\nObservations so far:\n" + "\n".join(observations) + "\n"
         prompt += "\nYour next action (JSON):"
-        action = (provider.extract(AgentAction, system=system, prompt=prompt)
-                  or provider.extract(AgentAction, system=system, prompt=prompt))   # one retry
+        action = provider.extract(AgentAction, system=system, prompt=prompt)
         if action is None:
             yield "prose", {"text": _finish_summary(ctx, "I couldn't form a valid next step.")}
             yield "done", {}

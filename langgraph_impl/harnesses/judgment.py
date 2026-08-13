@@ -11,4 +11,5 @@ from shared.harnesses.judgment import BoundaryCheck, judge   # noqa: F401 (re-ex
 
 
 def judgment_node(state: dict) -> dict:
-    return judge(tool=state["tool"], spec=state["spec"], llm_provider=state.get("llm_provider"))
+    return judge(tool=state["tool"], spec=state["spec"], llm_provider=state.get("llm_provider"),
+                 llm_model=state.get("llm_model"))

@@ -22,26 +22,32 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from shared.llm.provider import (NullProvider, OllamaProvider, ClaudeCLIProvider, ollama_available)
+from shared.llm.provider import (NullProvider, OllamaProvider, ClaudeCLIProvider, ollama_available,
+                                 OLLAMA_HOST, OLLAMA_MODEL)
 from shared import catalog, contracts_lib as cl, dataset
 from app import resolve
 from app.session import STORE
 
+# Claude CLI model aliases offered in the UI dropdown. The CLI resolves aliases to the current
+# version, so the list never goes stale; None/"" means the CLI's own default.
+_CLAUDE_MODELS = ["opus", "sonnet", "haiku"]
 
-def _chat_provider(name: str | None):
-    """Pick the chat brain. Explicit 'ollama'/'claude' if reachable; 'auto'/None prefers the Claude
-    CLI (subscription, no API key), then Ollama, then NullProvider (which routes to the deterministic
-    regex fallback). This is the ONLY place the chat's Claude-first default lives — the global
-    get_provider('auto') stays Ollama-first for the CLI/tests/harness internals."""
+
+def _chat_provider(name: str | None, model: str | None = None):
+    """Pick the chat brain at an optional specific model. Explicit 'ollama'/'claude' if reachable;
+    'auto'/None prefers the Claude CLI (subscription, no API key), then Ollama, then NullProvider
+    (which routes to the deterministic regex fallback). This is the ONLY place the chat's Claude-first
+    default lives — the global get_provider('auto') stays Ollama-first for the CLI/tests/harness."""
+    model = model or None                          # normalize "" -> None (provider default)
     if name == "ollama":
-        return OllamaProvider() if ollama_available() else NullProvider()
+        return OllamaProvider(model=model or OLLAMA_MODEL) if ollama_available() else NullProvider()
     if name == "claude":
-        p = ClaudeCLIProvider()
+        p = ClaudeCLIProvider(model=model)
         return p if p.is_available() else NullProvider()
-    p = ClaudeCLIProvider()                       # auto / None: Claude first
+    p = ClaudeCLIProvider(model=model)            # auto / None: Claude first
     if p.is_available():
         return p
-    return OllamaProvider() if ollama_available() else NullProvider()
+    return OllamaProvider(model=model or OLLAMA_MODEL) if ollama_available() else NullProvider()
 
 
 def _resolve_tool_name(name: str) -> str | None:
@@ -95,6 +101,7 @@ from app.capabilities import (describe_data, run_pipeline, add_tool, explain_too
 class ChatRequest(BaseModel):
     message: str
     provider: str | None = None            # 'ollama' | 'claude' | 'auto'/None
+    model: str | None = None               # specific model (Ollama tag or Claude alias); None = default
     file: str | None = None                # optional explicit file path from the UI
     history: list[dict] = []               # prior turns [{role, content}] for context (memory)
     session_id: str | None = None          # persistent session id (UI localStorage); validated server-side
@@ -131,7 +138,7 @@ def make_chat_router() -> APIRouter:
 
     @router.post("/api/chat")
     async def chat(req: ChatRequest):
-        provider = _chat_provider(req.provider)
+        provider = _chat_provider(req.provider, req.model)
         sid = STORE.ensure(req.session_id)          # validated/minted; echoed back so the UI persists it
 
         async def _emit(rec):
@@ -175,6 +182,7 @@ def make_chat_router() -> APIRouter:
             dataset.record("intent", model=provider.name, prompt=req.message,
                            response=intent.intent, labels={"intent": intent.intent})
             yield rec("meta", json.dumps({"provider": provider.name, "intent": intent.intent,
+                                          "model": getattr(provider, "model", None),
                                           "mode": "deterministic", "sid": sid}))
             for n in notes:
                 yield rec("log", json.dumps({"text": f"grounded: {n}"}))
@@ -368,6 +376,23 @@ def make_chat_router() -> APIRouter:
         if path is None:
             raise HTTPException(status_code=404, detail="no report for that run")
         return FileResponse(str(path), media_type="text/html")
+
+    # -- model picker: installed Ollama models + Claude CLI aliases ----------
+
+    @router.get("/api/models")
+    def list_models() -> dict:
+        """Models the UI can offer per provider: installed Ollama tags (live) + Claude CLI aliases.
+        Empty ollama list when the server is down — the dropdown just shows the default option then."""
+        ollama: list[str] = []
+        try:
+            import requests as _rq
+            r = _rq.get(f"{OLLAMA_HOST}/api/tags", timeout=3)
+            r.raise_for_status()
+            ollama = sorted(m["name"] for m in r.json().get("models", []) if m.get("name"))
+        except Exception:                    # noqa: BLE001 - Ollama down / unreachable
+            ollama = []
+        return {"ollama": ollama, "claude": list(_CLAUDE_MODELS),
+                "defaults": {"ollama": OLLAMA_MODEL}}
 
     # -- working directory (the folder data paths resolve against) -----------
 

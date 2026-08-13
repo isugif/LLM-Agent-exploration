@@ -435,7 +435,7 @@ def test_run_pipeline_event_mapping():
 def offline(monkeypatch):
     """Force no reachable model so chat routes to the deterministic fallback (no live LLM)."""
     import app.api.routes_chat as rc
-    monkeypatch.setattr(rc, "_chat_provider", lambda name=None: NullProvider())
+    monkeypatch.setattr(rc, "_chat_provider", lambda name=None, model=None: NullProvider())
 
 
 def test_chat_describe_data_sse(fastq, offline):
@@ -486,16 +486,32 @@ def test_chat_model_present_uses_agent(monkeypatch):
 
     class ScriptedProvider:
         name = "scripted"
+        model = "opus"                       # exercise model threading into the meta event
         def extract(self, schema_model, system, prompt): return AgentAction(answer="hi")
         def complete(self, system, prompt): return ""
 
-    monkeypatch.setattr(rc, "_chat_provider", lambda name=None: ScriptedProvider())
+    monkeypatch.setattr(rc, "_chat_provider", lambda name=None, model=None: ScriptedProvider())
     client = TestClient(create_app())
-    r = client.post("/api/chat", json={"message": "hello", "provider": "claude"})
+    r = client.post("/api/chat", json={"message": "hello", "provider": "claude", "model": "opus"})
     assert r.status_code == 200
     events = _parse_sse(r.text)
-    assert json.loads(events["meta"])["mode"] == "agent"
+    meta = json.loads(events["meta"])
+    assert meta["mode"] == "agent" and meta["model"] == "opus"
     assert "prose" in events and "done" in events
+
+
+def test_models_endpoint_lists_providers():
+    client = TestClient(create_app())
+    m = client.get("/api/models").json()
+    assert set(["opus", "sonnet", "haiku"]) <= set(m["claude"])   # Claude aliases always offered
+    assert isinstance(m["ollama"], list)                          # installed tags (may be empty)
+
+
+def test_provider_by_name_threads_model():
+    """The rebuilt provider (used by the internal run_tool harness) honors the selected model."""
+    from shared.llm.provider import provider_by_name
+    assert provider_by_name("claude", "sonnet").model == "sonnet"
+    assert provider_by_name("ollama", "qwen3:8b").model == "qwen3:8b"
 
 
 def _parse_sse(text: str) -> dict:
