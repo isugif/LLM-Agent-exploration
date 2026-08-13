@@ -51,7 +51,7 @@ async def run_pipeline(fastq: str, question: str, deliverable: str | None = None
     report["spec"] = spec.to_dict()
 
     # --- 2. Judgment (fit critic) -------------------------------------------
-    gate = judge.review_gate()                    # HRR: refuse an unreviewed contract up front
+    gate = judge.review_gate() or judge.runnable_gate()   # refuse unreviewed OR not-runnable up front
     if gate is not None:
         report["route"] = gate.to_dict()
         report["run_result"] = None
