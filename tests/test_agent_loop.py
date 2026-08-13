@@ -190,6 +190,43 @@ def test_run_tool_aggregator_defaults_to_runs_dir():
     assert any("reports_present" in f for f in judged[0].get("precondition_failures", []))
 
 
+def test_build_args_from_flat_fields():
+    """The model fills FLAT typed fields; the loop assembles the tool's arg dict deterministically."""
+    from app.agent_loop import _build_args
+    a = AgentAction(tool="run_tool", bio_tool="minimap2", pattern="snf", reference="ref.fasta")
+    assert _build_args(a) == {"tool": "minimap2", "pattern": "snf", "reference": "ref.fasta"}
+    assert _build_args(AgentAction(tool="explain_tool", bio_tool="fastqc")) == {"tool": "fastqc"}
+    assert _build_args(AgentAction(tool="find_tool", query="alignment")) == {"query": "alignment"}
+    assert _build_args(AgentAction(tool="probe_data", path="x.fastq.gz")) == {"path": "x.fastq.gz"}
+
+
+def test_toolname_literal_matches_registry():
+    """The `tool` Literal (what structured output constrains the model to) stays in sync with TOOLS."""
+    import typing
+    ann = AgentAction.model_fields["tool"].annotation          # Optional[Literal[...]]
+    literal = next(a for a in typing.get_args(ann) if typing.get_origin(a) is typing.Literal)
+    assert set(typing.get_args(literal)) == set(agent_loop.TOOLS)
+
+
+def test_flat_run_tool_pattern_end_to_end(tmp_path, monkeypatch):
+    """The flat-field action (bio_tool + pattern, no nested args) runs every matching file in one call."""
+    import shutil, gzip
+    if shutil.which("fastqc") is None:
+        import pytest
+        pytest.skip("fastqc not installed")
+    from app import workdir
+    for nm in ("snf2_1.fastq.gz", "snf2_2.fastq.gz", "wt_1.fastq.gz"):
+        with gzip.open(tmp_path / nm, "wt") as fh:
+            fh.write("@r\nACGTACGTAC\n+\nIIIIIIIIII\n")
+    monkeypatch.setattr(workdir, "_workdir", tmp_path)
+    events, sid = _drive([
+        AgentAction(tool="run_tool", bio_tool="fastqc", pattern="snf"),   # FLAT fields, no args dict
+        AgentAction(answer="done"),
+    ])
+    files = sorted(Path(r["file"]).name for r in STORE.load_runs(sid))
+    assert files == ["snf2_1.fastq.gz", "snf2_2.fastq.gz"]
+
+
 def test_extract_retry_recovers_from_a_null():
     """A flaky first extraction (None) is retried once; a valid action on the retry recovers the turn
     instead of giving up with 'I couldn't form a valid next step'."""
