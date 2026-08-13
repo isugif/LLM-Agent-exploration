@@ -98,6 +98,10 @@ class OllamaProvider:
                 {"role": "user", "content": prompt},
             ],
             "stream": False,
+            "think": False,                  # disable "thinking" (Qwen3 etc.): its <think> preamble
+                                             # breaks structured JSON parsing and is slow. Safe no-op
+                                             # for non-thinking models / older Ollama (unknown key
+                                             # ignored). Override per-model via a Modelfile if needed.
             "options": {"temperature": 0},
         }
         if fmt is not None:

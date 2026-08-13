@@ -421,7 +421,15 @@ def run_agent(message: str, history: list[dict], provider, sid: str) -> Iterator
         if observations:
             prompt += "\nObservations so far:\n" + "\n".join(observations) + "\n"
         prompt += "\nYour next action (JSON):"
+        # One retry with a stricter nudge: local models occasionally emit an unparseable step (extra
+        # prose, a stray <think> block). A second attempt recovers most of them. The retry only fires
+        # when the first returned None, so it never slows a successful step.
         action = provider.extract(AgentAction, system=system, prompt=prompt)
+        if action is None:
+            action = provider.extract(
+                AgentAction, system=system,
+                prompt=prompt + "\n\nReturn ONLY a single JSON object for one action — no prose, no "
+                                "<think>, no code fence.")
         if action is None:
             yield "prose", {"text": _finish_summary(ctx, "I couldn't form a valid next step.")}
             yield "done", {}
