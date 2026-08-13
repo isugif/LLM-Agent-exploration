@@ -72,6 +72,22 @@ External clients (Claude Desktop/Code) can drive the same harness over stdio:
 `python -m mcp_server.server`. (The NOOA research track needs one extra, non-PyPI dependency — see
 [`docs/DEVELOPING.md`](docs/DEVELOPING.md).)
 
+### Local models (Ollama)
+
+The agent needs a capable **text** model with good structured-output / tool selection (avoid vision
+models for the tool loop). Default: `qwen3.6:35b-a3b` — a fast mixture-of-experts model. Pull it and
+keep it warm so it isn't reloaded between calls:
+
+```bash
+ollama pull qwen3.6:35b-a3b               # or set your own with the header's model dropdown / OLLAMA_MODEL
+export OLLAMA_KEEP_ALIVE=-1               # keep the model resident (or e.g. 30m); read by `ollama serve`
+ollama serve                             # start the server in that same environment
+```
+
+`OLLAMA_KEEP_ALIVE` is an **Ollama server** setting — export it in the shell (or your launchd/systemd
+unit) where `ollama serve` runs; `-1` pins the model in memory, avoiding the multi-second reload that
+otherwise hits the first call after a few idle minutes.
+
 ## Status — early, and honest about it
 
 FastQC and MultiQC are the first two tools; the durable contribution is the **pattern** — machine-

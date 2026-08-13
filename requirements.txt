@@ -28,4 +28,4 @@ uvicorn[standard]==0.52.1
 mcp[cli]==2.0.0
 
 # External (not pip): FastQC 0.12.x  ->  mamba install -c bioconda fastqc
-# External: a local Ollama server + a model (default OLLAMA_MODEL=qwen2.5vl:7b)
+# External: a local Ollama server + a model (default OLLAMA_MODEL=qwen3.6:35b-a3b)

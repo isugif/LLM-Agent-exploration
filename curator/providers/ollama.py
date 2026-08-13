@@ -1,6 +1,6 @@
 """Local Ollama provider (generic text `run()`), same host/model convention as the repo harness.
 
-Uses Ollama's /api/chat. Model via OLLAMA_MODEL (default qwen2.5vl:7b), host via OLLAMA_HOST.
+Uses Ollama's /api/chat. Model via OLLAMA_MODEL (default qwen3.6:35b-a3b), host via OLLAMA_HOST.
 This is the cheap/offline generation path (fine for enrichment; source-transfer prefers Claude).
 """
 

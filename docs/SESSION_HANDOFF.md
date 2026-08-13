@@ -43,7 +43,7 @@ Knowledge base (read these next):
 
 ```bash
 source "$(conda info --base)/etc/profile.d/conda.sh" && conda activate nooa
-export OLLAMA_MODEL=qwen2.5vl:7b     # local model (Ollama at :11434); `claude` CLI also present
+export OLLAMA_MODEL=qwen3.6:35b-a3b     # local model (Ollama at :11434); `claude` CLI also present
 ```
 - The `nooa` conda env provides `nooa` (0.0.8, NOT on PyPI) + langgraph + deps. Don't `pip install nooa`.
 - Tools: harness tools live in `nooa` (fastqc/multiqc); the **curator** installs curation targets into a

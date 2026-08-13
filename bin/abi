@@ -5,7 +5,7 @@
 # against the directory you launched from. Put this dir on your PATH, or symlink `abi` onto it:
 #   ln -s "$(pwd)/bin/abi" ~/.local/bin/abi
 # Then, from any project folder:  abi           (opens the app with that folder as the workdir)
-#                                 abi --port 9000 --model qwen2.5vl:7b   (flags pass through)
+#                                 abi --port 9000 --model qwen3.6:35b-a3b   (flags pass through)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -32,7 +32,7 @@ T = TypeVar("T", bound=BaseModel)
 # The one place the Ollama endpoint convention lives — nooa_impl/llm.py and the curator's
 # ollama provider import these rather than re-reading the env themselves.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5vl:7b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.6:35b-a3b")
 
 LLM_UNAVAILABLE = "[LLM unavailable — deterministic-only]"
 

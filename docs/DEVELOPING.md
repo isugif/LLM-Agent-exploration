@@ -11,12 +11,16 @@ conda activate bioharness
 pip install -r requirements.txt          # langgraph, langchain-core, pyyaml, jsonschema, requests,
                                          # fastapi, uvicorn, mcp[cli], pydantic
 conda install -c bioconda fastqc -y      # FastQC 0.12.x
-export OLLAMA_MODEL=qwen2.5vl:7b         # optional local model (Ollama :11434); the `claude` CLI also works
+export OLLAMA_MODEL=qwen3.6:35b-a3b         # optional local model (Ollama :11434); the `claude` CLI also works
+export OLLAMA_KEEP_ALIVE=-1              # (Ollama server setting) keep the model warm between calls
 bash shared/data/fetch_virus_fastq.sh    # download + subsample the test FASTQ
 ```
 
 - This env runs the **chat app**, the **MCP server**, and the **LangGraph track** — everything in the
   Quick start plus `python -m pytest` / `tests/run_tests.py`.
+- **Local-model agent:** `ollama pull qwen3.6:35b-a3b` (a text/tool model, not a vision model); set
+  `OLLAMA_KEEP_ALIVE` in the environment where `ollama serve` runs so the model isn't reloaded per
+  call. Pick a specific model at runtime from the header dropdown or via `OLLAMA_MODEL`.
 - The **NOOA track** (`python -m nooa_impl.run`) additionally requires the `nooa` package (0.0.8),
   which is **not on PyPI** and is installed separately — so that one comparison track is not
   reproducible from `requirements.txt` alone.
