@@ -1,0 +1,13 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Precondition.
+- id: input_is_fastq
+  assert: "measured.format == 'fastq'"
+  severity: block
+  message: "hisat2 aligns FASTQ reads; the input did not parse as FASTQ."
+- id: reads_present
+  assert: "measured.n_reads_sampled > 0"
+  severity: block
+  message: "No reads found in the input file; nothing to align."
+- id: reference_provided
+  assert: "measured.has_reference == True"
+  severity: block
+  message: "hisat2 builds its index from a reference genome (FASTA); none was provided. Supply --reference (CLI) or a FASTA path (chat)."

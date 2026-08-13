@@ -59,6 +59,48 @@ def test_runner_errors_when_reference_missing():
     assert not r.ok and "requires a reference" in (r.error or "")
 
 
+# --- runner multi-step execution (`steps`) — no real tools needed -----------------
+
+def test_runner_runs_steps_in_order(tmp_path):
+    """A `steps` contract runs each command in order, sharing {out_dir}."""
+    contract = {"id": "twostep", "execution": {"steps": [
+        ["sh", "-c", "echo one > {out_dir}/a.txt"],
+        ["sh", "-c", "echo two > {out_dir}/b.txt"]]}}
+    r = run_tool(contract, "reads.fq", str(tmp_path))
+    assert r.ok
+    assert (tmp_path / "a.txt").exists() and (tmp_path / "b.txt").exists()
+    assert len(r.audit["cmds"]) == 2
+
+
+def test_runner_steps_stop_on_failure(tmp_path):
+    """A failed step aborts the sequence (later steps don't run) and reports which step failed."""
+    contract = {"id": "twostep", "execution": {"steps": [
+        ["sh", "-c", "exit 3"],
+        ["sh", "-c", "echo nope > {out_dir}/b.txt"]]}}
+    r = run_tool(contract, "x", str(tmp_path))
+    assert not r.ok and r.exit_code == 3
+    assert not (tmp_path / "b.txt").exists()          # step 2 never ran
+    assert r.audit.get("failed_step") == 1
+
+
+# --- hisat2 two-step (build index -> align), only if hisat2 is installed -----------
+
+@pytest.mark.skipif(shutil.which("hisat2") is None or shutil.which("hisat2-build") is None,
+                    reason="hisat2 not installed")
+def test_hisat2_two_step_end_to_end(tmp_path):
+    ref = tmp_path / "ref.fasta"
+    ref.write_text(">ref\n" + "ACGTACGTACGTACGTACGTACGTACGTACGT" * 16 + "\n")   # ~512 bp
+    reads = tmp_path / "reads.fastq"
+    seq = "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT"                          # 40 bp
+    reads.write_text("".join(f"@r{i}\n{seq}\n+\n{'I'*len(seq)}\n" for i in range(20)))
+    contract = cl.load_contract("hisat2")
+    out = tmp_path / "out"
+    r = run_tool(contract, str(reads), str(out), inputs={"reference": str(ref)})
+    assert r.ok, r.error or r.stderr[-300:]
+    assert (out / "aln.sam").exists()                 # step 2 wrote the SAM
+    assert len(r.audit["cmds"]) == 2                  # build + align
+
+
 # --- harness gate: minimap2 refuses before compute without a reference ---------
 
 def test_minimap2_refuses_without_reference():

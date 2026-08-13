@@ -7,6 +7,28 @@ Status: 💡 idea · 📋 scoped · 🔨 in progress · ✅ done (link the commi
 
 ---
 
+## Workflow composition — chain tools + reusable intermediate artifacts
+
+**Status:** 💡 idea
+
+**What:** hisat2's index build is currently modeled as a **step inside** hisat2's own contract
+(`execution.steps`: `hisat2-build` → `hisat2`, sharing `{out_dir}`) — the pragmatic first cut. The
+richer model is **composition**: `hisat2_build` (fasta → index) and `hisat2` (reads + index → SAM) as
+**separate capability contracts** (like `samtools_sort` / `samtools_markdup`), and the harness chains
+them into a small pipeline, threading the intermediate. That unlocks:
+- each step gets its **own four checkpoints** (a bad FASTA fails at `hisat2_build`'s diagnosis; a
+  missing index refuses at `hisat2`'s preconditions) instead of being buried in one execution;
+- the index becomes a **reusable, cacheable artifact** — build once, align many (build-vs-reuse
+  decisioning);
+- it generalizes the real thing: `align → sort → markdup → multiqc` as a composed workflow.
+
+**Why deferred:** composition (a chaining engine, artifact passing, build-vs-reuse caching) is
+milestone-sized; the multi-step `execution.steps` runner (shipped) is the stepping stone that proves
+the intermediate-artifact plumbing composition needs. Do it when there are several multi-tool
+workflows to justify it. Pairs with the "retrieve & match" item below (reuse / adapt / **compose**).
+
+---
+
 ## Judgment "retrieve & match" — automatic tool selection
 
 **Status:** 💡 idea

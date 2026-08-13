@@ -1,9 +1,18 @@
 # Per-tool index. Validates against shared/sections/schemas.py:Manifest.
-# hisat2 is a REFERENCE ANCHOR for the `multi_step` tool type (see the curator's references/anchors.py).
-# It carries CONTEXT sections only — it is not wired into the harness, so it has no machine sections.
+# hisat2 is a splice-aware read aligner and the first MULTI-STEP tool: it needs a prebuilt index, so
+# execution is a two-step run (hisat2-build -> hisat2) — see clean/execution.yml. Machine sections are
+# HUMAN-REVIEWED (no HRR_ markers), so judgment will route it; alignment needs a reference FASTA
+# ({reference}) and is refused before compute if missing (see preconditions).
 tool: hisat2
 version: "2.2.3"
 sections:
+  # --- machine sections (assembled into the runtime contract) ---
+  - {name: meta,          purpose: "summary + expectations link",             load_when: always,           machine: true,  path: clean/meta.yml}
+  - {name: execution,     purpose: "two-step index-build + align",            load_when: always,           machine: true,  path: clean/execution.yml}
+  - {name: preconditions, purpose: "assertable input preconditions",          load_when: always,           machine: true,  path: clean/preconditions.yml}
+  - {name: must_not_use,  purpose: "off-label boundaries",                    load_when: always,           machine: true,  path: clean/must_not_use.yml}
+  - {name: failure_modes, purpose: "crash signals + fixes",                   load_when: always,           machine: true,  path: clean/failure_modes.yml}
+  # --- context sections (loaded on demand) ---
   - {name: install,      purpose: "how to install and verify HISAT2",        load_when: install_error,    machine: false, path: clean/install.yml}
   - {name: input,        purpose: "reads (fastq/fasta) + a prebuilt index",  load_when: always,           machine: false, path: clean/input.yml}
   - {name: output,       purpose: "SAM alignments",                          load_when: always,           machine: false, path: clean/output.yml}

@@ -1,0 +1,16 @@
+# CLEAN machine section (list). Each item validates against schemas.py:Boundary.
+- id: not_a_variant_caller
+  boundary: >
+    Not a variant caller. hisat2 produces alignments (SAM), never variants; do not treat its output
+    as SNPs/indels or draw genotype conclusions from it — that needs bcftools/GATK downstream.
+  keywords: [variant, variants, snp, snps, indel, genotype, call variants, vcf]
+- id: reference_must_match_organism
+  boundary: >
+    The reference must be the organism the reads came from (or an intended target). Aligning reads to
+    a mismatched-organism reference runs fine but yields biologically meaningless mappings.
+  keywords: [different organism, wrong reference, cross-species, any genome, mismatched reference]
+- id: not_an_assembler
+  boundary: >
+    Not a de-novo assembler and not an expression quantifier. Do not use it to build a genome from
+    reads or to produce gene/transcript counts (that is a downstream step, e.g. featureCounts).
+  keywords: [assemble, assembly, de novo, quantify expression, gene counts, transcript counts]

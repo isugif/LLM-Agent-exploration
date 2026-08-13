@@ -72,10 +72,13 @@ def _tool_extra_inputs(tool: str) -> tuple[bool, bool, bool]:
     from shared.tools.registry import PROBES
     from shared.probes.aln_probe import probe_alignment
     try:
-        argv = cl.load_contract(tool).get("execution", {}).get("argv", [])
+        ex = cl.load_contract(tool).get("execution", {})
+        tokens = list(ex.get("argv") or [])
+        for step in (ex.get("steps") or []):       # multi-step tools (e.g. hisat2) carry argv in steps
+            tokens += step
     except Exception:  # noqa: BLE001
-        argv = []
-    joined = " ".join(argv)
+        tokens = []
+    joined = " ".join(tokens)
     return ("{reference}" in joined, "{annotation}" in joined,
             PROBES.get(tool) is probe_alignment)
 

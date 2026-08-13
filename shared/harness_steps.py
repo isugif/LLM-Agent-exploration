@@ -56,14 +56,15 @@ def runnable_gate(contract: dict[str, Any]) -> Optional[RouteDecision]:
     """Refuse a documented-but-not-runnable tool (no machine execution section / argv) BEFORE compute,
     instead of failing later in the runner. A tool curated for explain/find only carries context
     sections; running it needs a machine execution contract."""
-    if contract.get("execution", {}).get("argv"):
+    ex = contract.get("execution", {})
+    if ex.get("argv") or ex.get("steps"):          # single-command or multi-step -> runnable
         return None
     tid = contract.get("id", "this tool")
     return RouteDecision(
         action="refuse",
         rationale=f"{tid} is documented but not runnable: its contract has no machine execution "
-                  f"section (argv). Add `bio-tools/{tid}/clean/execution.yml` (+ preconditions and a "
-                  f"parser) to run it.",
+                  f"section (argv/steps). Add `bio-tools/{tid}/clean/execution.yml` (+ preconditions "
+                  f"and a parser) to run it.",
         confidence=1.0,
         precondition_failures=["not_runnable: no execution.argv"],
     )

@@ -1,0 +1,8 @@
+# CLEAN machine section. Validates against schemas.py:ExecutionSection. Drives shared/execution/runner.py.
+# hisat2 needs a prebuilt index, so this is a TWO-STEP run: build the index from the reference FASTA,
+# then align the reads against it. Both steps share {out_dir}; the index lands at {out_dir}/index.*.
+steps:
+  - [hisat2-build, "{reference}", "{out_dir}/index"]
+  - [hisat2, -x, "{out_dir}/index", -U, "{input}", -S, "{out_dir}/aln.sam"]
+version_argv: [hisat2, --version]
+install_hint: "mamba install -c bioconda hisat2"

@@ -34,6 +34,7 @@ PARSERS: dict[str, Fn] = {
     "fastqc": parse_fastqc,
     "multiqc": parse_multiqc,
     "minimap2": parse_minimap2,
+    "hisat2": parse_minimap2,          # writes {out_dir}/aln.sam — the generic SAM parser handles it
     "seqkit": parse_seqkit,
     "rustqc": parse_rustqc,
     "samtools_sort": parse_bam_transform,

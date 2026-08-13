@@ -1,0 +1,10 @@
+# CLEAN machine section (list). Each item validates against schemas.py:FailureMode.
+- id: reference_unreadable
+  signal: "does not exist"
+  fix: "hisat2-build could not open the reference FASTA. Confirm the path exists and is readable FASTA."
+- id: no_index
+  signal: "Could not locate a HISAT2 index"
+  fix: "The index build did not produce files hisat2 could read. Confirm hisat2-build succeeded and {out_dir}/index.* exist."
+- id: empty_reference
+  signal: "Warning: Empty reference"
+  fix: "The reference FASTA has no sequences. Re-fetch it (e.g. bash shared/data/fetch_reference.sh)."
