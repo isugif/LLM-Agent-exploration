@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -38,12 +38,53 @@ MAX_STEPS = 10             # headroom for inspect + run_tool across several file
 _READ_CAP = 4000            # bytes returned by read_file (head only; enough to identify a file)
 
 
+# The tools the model may name. A Literal so structured-output/grammar-constrained decoding forces a
+# VALID tool name (the model can't hallucinate one). Kept in sync with TOOLS (asserted in tests).
+ToolName = Literal["list_workdir", "list_outputs", "read_file", "probe_data", "describe_data",
+                   "list_catalog", "explain_tool", "find_tool", "session_query", "add_tool", "run_tool"]
+
+
 class AgentAction(BaseModel):
-    """One step the model proposes: either call a tool, or answer and stop."""
+    """One step the model proposes. The model fills FLAT typed fields — no nested args dict to get
+    wrong — and the loop assembles the actual tool call deterministically (see `_build_args`)."""
     thought: str = Field(default="", description="one short sentence of reasoning")
-    tool: Optional[str] = Field(default=None, description="tool name to call, or null to answer now")
-    args: dict = Field(default_factory=dict, description="arguments for the tool")
+    tool: Optional[ToolName] = Field(default=None, description="which tool to call, or null to finish")
+    # flat parameters — fill ONLY those the chosen tool needs:
+    bio_tool: Optional[str] = Field(default=None, description="the program for run_tool/explain_tool/add_tool, e.g. fastqc, hisat2")
+    path: Optional[str] = Field(default=None, description="a single file/dir path")
+    pattern: Optional[str] = Field(default=None, description="a filename glob/substring, e.g. 'snf' — runs every match")
+    reference: Optional[str] = Field(default=None, description="a reference genome FASTA (aligners)")
+    annotation: Optional[str] = Field(default=None, description="a GTF annotation (rustqc)")
+    query: Optional[str] = Field(default=None, description="a natural-language query (find_tool/session_query/list_catalog)")
     answer: Optional[str] = Field(default=None, description="final answer to the user when tool is null")
+    args: dict = Field(default_factory=dict, description="(fallback) nested args if you can't use the flat fields")
+
+
+def _build_args(a: "AgentAction") -> dict:
+    """Assemble the args dict a tool handler expects from the model's FLAT fields (deterministic — the
+    model only fills variables). Any nested `args` it did send is honored as a fallback, then the flat
+    fields overlay it (flat wins)."""
+    args = dict(a.args or {})
+    t = a.tool
+    if t == "run_tool":
+        if a.bio_tool:
+            args["tool"] = a.bio_tool
+        for k in ("path", "pattern", "reference", "annotation"):
+            if getattr(a, k):
+                args[k] = getattr(a, k)
+    elif t in ("explain_tool", "add_tool"):
+        if a.bio_tool:
+            args["tool"] = a.bio_tool
+    elif t in ("probe_data", "read_file", "describe_data"):
+        if a.path:
+            args["path"] = a.path
+    elif t in ("find_tool", "session_query"):
+        if a.query:
+            args["query"] = a.query
+    elif t == "list_catalog":
+        if a.query:
+            args["text"] = a.query
+    return args
 
 
 # --- read-only helpers ---------------------------------------------------------
@@ -380,8 +421,16 @@ def _system_prompt() -> str:
         "a raw shell command. The ONLY way to execute a bioinformatics tool is the run_tool tool, "
         "which itself checks fitness and may refuse. Never claim a tool ran unless run_tool says so.",
         "",
-        "Each step, return JSON for ONE action: either call a tool (set `tool` and `args`) or finish "
-        "(set `tool` to null and put your reply in `answer`). Available tools:",
+        "Each step, return JSON for ONE action. Set `tool` to the tool name (or null to FINISH), and "
+        "fill only the FLAT fields it needs — do NOT nest arguments:",
+        "  - `bio_tool`: the program, for run_tool / explain_tool / add_tool (e.g. fastqc, hisat2, minimap2)",
+        "  - `path`: a single file or directory",
+        "  - `pattern`: a filename glob/substring (e.g. 'snf') — runs the tool on EVERY match",
+        "  - `reference`: a reference genome FASTA (aligners) · `annotation`: a GTF (rustqc)",
+        "  - `query`: a natural-language query (find_tool / session_query)",
+        "  - `answer`: your reply to the user (when `tool` is null)",
+        "",
+        "Available tools:",
     ]
     for name, (desc, _) in TOOLS.items():
         lines.append(f"  - {name}: {desc}")
@@ -389,11 +438,11 @@ def _system_prompt() -> str:
         "",
         "Rules:",
         "  - If you don't know the filenames, call list_workdir FIRST.",
-        "  - To run a tool on MANY files (e.g. 'all snf files'), pass a `pattern` to run_tool ONCE — it "
+        "  - To run a tool on MANY files (e.g. 'all snf files'), set `pattern` on run_tool ONCE — it "
         "runs every match in a single call. Do NOT loop run_tool file-by-file.",
-        "  - Aggregators (e.g. multiqc) take no path — call run_tool with just the tool name; it "
+        "  - Aggregators (e.g. multiqc) take no path — set `tool`=run_tool and `bio_tool`=multiqc; it "
         "defaults to this session's run outputs.",
-        "  - When the request is satisfied, STOP: set tool to null and summarize in `answer`. Don't "
+        "  - When the request is satisfied, STOP: set `tool` to null and summarize in `answer`. Don't "
         "re-run files already listed in `completed`.",
     ]
     return "\n".join(lines)
@@ -440,22 +489,23 @@ def run_agent(message: str, history: list[dict], provider, sid: str) -> Iterator
             yield "done", {}
             return
 
-        name = action.tool.strip()
-        if name not in TOOLS:
+        name = action.tool
+        if name not in TOOLS:                      # (the Literal makes this near-impossible, but guard)
             observations.append(f"[{name}] error: unknown tool; choose from {list(TOOLS)}")
             yield "log", {"text": f"ignored unknown tool '{name}'"}
             continue
 
-        sig = name + "|" + _compact(action.args, 200)
+        args = _build_args(action)                 # deterministic: flat fields -> the tool's arg dict
+        sig = name + "|" + _compact(args, 200)
         seen[sig] = seen.get(sig, 0) + 1
         if seen[sig] >= 3:                         # persistent identical repetition -> stop cleanly
             yield "prose", {"text": _finish_summary(ctx, "Stopping — the model kept repeating a step.")}
             yield "done", {}
             return
 
-        yield "log", {"text": f"→ {name}({_compact(action.args)})"}
+        yield "log", {"text": f"→ {name}({_compact(args)})"}
         try:
-            events, observation = TOOLS[name][1](action.args, ctx)
+            events, observation = TOOLS[name][1](args, ctx)
         except Exception as exc:                  # noqa: BLE001 - surface, don't hang the stream
             observations.append(f"[{name}] error: {exc}")
             yield "stage", {"stage": "error", "title": "Error", "error": str(exc)}
