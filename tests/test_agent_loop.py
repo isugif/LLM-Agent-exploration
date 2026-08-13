@@ -190,6 +190,15 @@ def test_run_tool_aggregator_defaults_to_runs_dir():
     assert any("reports_present" in f for f in judged[0].get("precondition_failures", []))
 
 
+def test_extract_retry_recovers_from_a_null():
+    """A flaky first extraction (None) is retried once; a valid action on the retry recovers the turn
+    instead of giving up with 'I couldn't form a valid next step'."""
+    events, _ = _drive([None, AgentAction(answer="recovered")])   # first extract None, retry succeeds
+    proses = [d.get("text", "") for (n, d) in events if n == "prose"]
+    assert proses and proses[-1] == "recovered"
+    assert not any("couldn't form a valid next step" in t for t in proses)
+
+
 def test_degrades_without_llm():
     from shared.llm.provider import NullProvider
     sid = STORE.ensure(None)
