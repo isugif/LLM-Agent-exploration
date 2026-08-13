@@ -30,6 +30,16 @@ GOOD = str(REPO / "tests/inputs/good.fastq.gz")
 
 # --- refuse before compute -----------------------------------------------------
 
+def test_run_pipeline_reuses_declared_facts():
+    """Passing `declared` skips onboarding's LLM extraction and carries the reused facts into the
+    spec — the batch cost-saver's plumbing."""
+    r = pipeline.run_pipeline(tool="minimap2", fastq=GOOD, reference=None, question="align",
+                              declared={"platform": "nanopore", "assay": "dna-seq",
+                                        "layout": "SE", "organism": "yeast"})
+    assert r["declared"]["assay"] == "dna-seq"
+    assert r["spec"]["declared"]["platform"] == "nanopore"
+
+
 def test_refuse_short_circuits_before_compute():
     """minimap2 with no reference must refuse in judgment and never reach execution."""
     r = pipeline.run_pipeline(tool="minimap2", fastq=GOOD, reference=None,

@@ -29,7 +29,8 @@ from shared.harnesses.diagnosis import diagnose
 def run_pipeline(*, tool: str, fastq: str, question: Optional[str] = None,
                  deliverable: Optional[str] = None, reference: Optional[str] = None,
                  annotation: Optional[str] = None, out_dir: Optional[str] = None,
-                 provider: Optional[str] = None, provider_model: Optional[str] = None) -> dict:
+                 provider: Optional[str] = None, provider_model: Optional[str] = None,
+                 declared: Optional[dict] = None) -> dict:
     """Run onboard -> judge -> (refuse | run -> evaluate | diagnose) and return the full trace.
 
     Returns a dict with: spec, route, run_result, verdict, out_dir, measured, declared,
@@ -43,7 +44,7 @@ def run_pipeline(*, tool: str, fastq: str, question: Optional[str] = None,
     # 1) onboarding — probe + declared/measured reconciliation
     ob = onboard(tool=tool, fastq=fastq, question=question, deliverable=deliverable,
                  reference=reference, annotation=annotation, provider_name=provider,
-                 provider_model=provider_model)
+                 provider_model=provider_model, declared=declared)
     result.update(ob)
     trace.append("onboarding")
 

@@ -26,28 +26,34 @@ class DeclaredFacts(BaseModel):
 
 def onboard(*, tool: str, fastq: str, question: str, deliverable: Optional[str] = None,
             reference: Optional[str] = None, annotation: Optional[str] = None,
-            provider_name: Optional[str] = None, provider_model: Optional[str] = None) -> dict:
+            provider_name: Optional[str] = None, provider_model: Optional[str] = None,
+            declared: Optional[dict] = None) -> dict:
     """Probe the input, extract declared facts, reconcile, and build the spec.
 
-    `provider_name` selects the LLM provider once for the run ("ollama" | "claude" | "auto"/None);
-    the resolved provider's name is returned as `llm_provider` so downstream checkpoints rebuild it
-    without re-checking availability.
+    `provider_name`/`provider_model` select the LLM once for the run; the resolved name is returned as
+    `llm_provider` so downstream checkpoints rebuild it without re-checking availability. Pass
+    `declared` to REUSE already-extracted facts (e.g. across a batch of files that share one question)
+    — that skips the LLM extraction *and* the availability probe, so per-file onboarding stays cheap.
     """
     measured = get_probe(tool)(fastq)
     measured["has_reference"] = bool(reference)     # aligner reference-required gate
     measured["has_annotation"] = bool(annotation)   # rustqc gtf-required gate
-    provider = get_provider(provider_name, provider_model)
 
-    declared: dict = {}
-    if not isinstance(provider, NullProvider):
-        parsed = provider.extract(
-            DeclaredFacts,
-            system="You extract sequencing metadata from a scientist's request. "
-                   "Only use what is stated; use 'unknown' when not stated.",
-            prompt=question,
-        )
-        if parsed is not None:
-            declared = parsed.model_dump()
+    if declared is None:                            # extract from the question (the one LLM call here)
+        provider = get_provider(provider_name, provider_model)
+        declared = {}
+        if not isinstance(provider, NullProvider):
+            parsed = provider.extract(
+                DeclaredFacts,
+                system="You extract sequencing metadata from a scientist's request. "
+                       "Only use what is stated; use 'unknown' when not stated.",
+                prompt=question,
+            )
+            if parsed is not None:
+                declared = parsed.model_dump()
+        resolved_provider = provider.name
+    else:                                           # reuse pre-extracted facts — no LLM call / no probe
+        resolved_provider = provider_name or "null"
 
     disagreements = reconcile(declared, measured)
     spec = Spec(
@@ -61,6 +67,6 @@ def onboard(*, tool: str, fastq: str, question: str, deliverable: Optional[str] 
         "measured": measured,
         "declared": declared,
         "spec": spec.to_dict(),
-        "llm_provider": provider.name,
+        "llm_provider": resolved_provider,
         "llm_model": provider_model,          # the selected model (None = provider default), threaded on
     }

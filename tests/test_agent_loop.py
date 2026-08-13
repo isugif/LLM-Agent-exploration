@@ -150,6 +150,32 @@ def test_run_tool_pattern_runs_matching_files_in_one_call(tmp_path, monkeypatch)
     assert len(judged) == 2
 
 
+def test_batch_extracts_declared_facts_once(tmp_path, monkeypatch):
+    """A multi-file batch does onboarding's LLM extraction ONCE (first file), reusing the declared
+    facts for the rest — the fix for the big per-file delay."""
+    import gzip
+    from app import workdir
+    import shared.harnesses.onboarding as ob
+    calls = {"n": 0}
+
+    class CountProvider:
+        name = "count"
+        def extract(self, schema, system, prompt):
+            calls["n"] += 1
+            return None                                   # -> declared stays {} (empty, but not None)
+        def complete(self, system, prompt):
+            return ""
+
+    monkeypatch.setattr(ob, "get_provider", lambda name=None, model=None: CountProvider())
+    for nm in ("snf2_1.fastq.gz", "snf2_2.fastq.gz"):
+        with gzip.open(tmp_path / nm, "wt") as fh:
+            fh.write("@r\nACGTACGTAC\n+\nIIIIIIIIII\n")
+    monkeypatch.setattr(workdir, "_workdir", tmp_path)
+    _drive([AgentAction(tool="run_tool", args={"tool": "fastqc", "pattern": "snf"}),
+            AgentAction(answer="done")])
+    assert calls["n"] == 1                                # one extraction for the whole 2-file batch
+
+
 def test_run_tool_aggregator_defaults_to_runs_dir():
     """'run multiqc' with no path -> deterministically defaults to the session runs/ dir (not a guessed
     folder); the empty session then refuses on reports_present."""

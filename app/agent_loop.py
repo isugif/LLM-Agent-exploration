@@ -92,10 +92,12 @@ def _input_candidates(tool: str) -> list[str]:
 
 
 def _match_names(pattern: str, names: list[str]) -> list[str]:
-    """Deterministic file selection: fnmatch, case-insensitive; a bare token like 'snf' -> '*snf*'."""
+    """Deterministic file selection: fnmatch on the BASENAME (files may be listed as 'data/x.fastq.gz',
+    so an anchored glob like 'snf*.fastq.gz' must match the filename, not the dir prefix),
+    case-insensitive; a bare token like 'snf' -> '*snf*'."""
     import fnmatch
     pat = (pattern if any(c in pattern for c in "*?[") else f"*{pattern}*").lower()
-    return [n for n in names if fnmatch.fnmatch(n.lower(), pat)]
+    return [n for n in names if fnmatch.fnmatch(os.path.basename(n).lower(), pat)]
 
 
 def _scoped_read(path: str, max_bytes: int = _READ_CAP) -> dict[str, Any]:
@@ -228,20 +230,23 @@ def _resolve_run_inputs(tool: str, args: dict, ctx: dict) -> tuple[list[str], st
     return [], "no file, pattern, or paths given"
 
 
-def _run_one(tool: str, path: str, ctx: dict, question: str,
-             reference=None, annotation=None) -> tuple[list, dict]:
-    """Run ONE input through the gate, idempotent per turn. Returns (events, per-file result)."""
+def _run_one(tool: str, path: str, ctx: dict, question: str, reference=None, annotation=None,
+             declared=None, provider_name=None) -> tuple[list, dict]:
+    """Run ONE input through the gate, idempotent per turn. `declared` reuses already-extracted facts
+    (skips onboarding's LLM call — the batch cost saver). Returns (events, per-file result)."""
     done = ctx.setdefault("done", {})
     key = os.path.realpath(path)
     if key in done:                               # already ran this file this turn -> no-op
         d = done[key]
         return ([("log", {"text": f"already ran {tool} on {Path(path).name}; not repeating"})],
-                {"path": path, "route": d["route"], "verdict": d["verdict"], "skipped": True})
+                {"path": path, "route": d["route"], "verdict": d["verdict"], "skipped": True,
+                 "declared": d.get("declared"), "llm_provider": d.get("llm_provider")})
     out_dir = str(STORE.run_dir(ctx["sid"], tool))
     result = pipeline.run_pipeline(
         tool=tool, fastq=path, question=question,
         reference=workdir.resolve_path(reference), annotation=workdir.resolve_path(annotation),
-        out_dir=out_dir, provider=ctx["provider_name"], provider_model=ctx.get("provider_model"))
+        out_dir=out_dir, provider=provider_name or ctx["provider_name"],
+        provider_model=ctx.get("provider_model"), declared=declared)
     action = result.get("route", {}).get("action")
     verdict = (result.get("verdict") or {}).get("status")
     metrics = (result.get("verdict") or {}).get("metrics", {}) or {}
@@ -253,10 +258,12 @@ def _run_one(tool: str, path: str, ctx: dict, question: str,
                                   "out_dir": out_dir, "out_name": Path(out_dir).name,
                                   "action": action, "verdict_status": verdict,
                                   "metrics": metrics, "findings": findings})
-    done[key] = {"path": path, "route": action, "verdict": verdict}
+    done[key] = {"path": path, "route": action, "verdict": verdict,
+                 "declared": result.get("declared"), "llm_provider": result.get("llm_provider")}
     events.append(("log", {"text": stage_render.summary_line(action, verdict, tool)}))
     return events, {"path": path, "route": action, "verdict": verdict, "findings": findings,
-                    "out_dir": out_dir}
+                    "out_dir": out_dir, "declared": result.get("declared"),
+                    "llm_provider": result.get("llm_provider")}
 
 
 def _batch_summary(tool: str, ran: list[dict]) -> str:
@@ -277,11 +284,19 @@ def _t_run_tool(args, ctx):
     question = args.get("question") or ctx["message"]
     events: list = [("log", {"text": f"→ {tool}: {note}"})] if note else []
     ran: list[dict] = []
+    # Extract declared facts ONCE per batch: the first file's onboarding does the LLM call, the rest
+    # reuse its declared facts (same question) — so a 3-file batch is 1 onboarding LLM call, not 3.
+    declared_cache = None
+    prov_cache = ctx["provider_name"]
     for p in paths:
-        evs, res = _run_one(tool, p, ctx, question,
-                            reference=args.get("reference"), annotation=args.get("annotation"))
+        evs, res = _run_one(tool, p, ctx, question, reference=args.get("reference"),
+                            annotation=args.get("annotation"),
+                            declared=declared_cache, provider_name=prov_cache)
         events.extend(evs)
         ran.append(res)
+        if declared_cache is None and res.get("declared") is not None:
+            declared_cache = res["declared"]                       # reuse for the remaining files
+            prov_cache = res.get("llm_provider") or prov_cache
     events.append(("log", {"text": _batch_summary(tool, ran)}))
     observation = {"ran": [{"file": Path(r["path"]).name, "route": r["route"], "verdict": r["verdict"]}
                            for r in ran],
