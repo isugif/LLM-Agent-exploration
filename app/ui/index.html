@@ -16,12 +16,15 @@
         <label class="prov">session
           <select id="session-select" title="load a past session, or start a new one"></select>
         </label>
-        <label class="prov">model
+        <label class="prov">provider
           <select id="provider">
             <option value="auto">auto</option>
             <option value="ollama">Ollama</option>
             <option value="claude">Claude</option>
           </select>
+        </label>
+        <label class="prov">model
+          <select id="model" title="specific model (empty = the provider's default)"><option value="">default</option></select>
         </label>
         <span id="brain" class="brainhint" title="active brain: the agent loop when a model is reachable, else the deterministic router"></span>
         <details class="settings" id="settings">

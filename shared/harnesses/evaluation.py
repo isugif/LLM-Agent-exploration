@@ -18,7 +18,8 @@ from shared.harness_steps import evaluation_verdict, score_metrics
 from shared.llm.provider import provider_by_name, NullProvider
 
 
-def evaluate(*, tool: str, run_result: dict, spec: dict, llm_provider: Optional[str] = None) -> dict:
+def evaluate(*, tool: str, run_result: dict, spec: dict, llm_provider: Optional[str] = None,
+             llm_model: Optional[str] = None) -> dict:
     """Score the run's output against expectations. Returns {"verdict": Verdict.to_dict()}."""
     contract = cl.load_contract(tool)
     expectations = cl.load_expectations(contract)
@@ -28,7 +29,7 @@ def evaluate(*, tool: str, run_result: dict, spec: dict, llm_provider: Optional[
 
     # LLM explanation is additive only; never changes the deterministic status.
     explanation = None
-    provider = provider_by_name(llm_provider)
+    provider = provider_by_name(llm_provider, llm_model)
     if findings and not isinstance(provider, NullProvider):
         explanation = provider.complete(
             system=f"You are a bioinformatics QC assistant. Explain flagged {tool} metrics briefly "

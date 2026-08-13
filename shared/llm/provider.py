@@ -148,9 +148,10 @@ class ClaudeCLIProvider:
 
     name = "claude"
 
-    def __init__(self):
+    def __init__(self, model: Optional[str] = None):
         from curator.providers.claude_cli import ClaudeCLIProvider as _CLI   # lazy
         self._cli = _CLI()
+        self.model = model               # the SELECTED model to thread (None = the `claude` CLI default)
 
     def is_available(self) -> bool:
         try:
@@ -158,17 +159,16 @@ class ClaudeCLIProvider:
         except Exception:                    # noqa: BLE001
             return False
 
-    @property
-    def model(self) -> str:
-        return getattr(self._cli, "model", "claude")
+    def _label(self) -> str:
+        return self.model or "claude"        # for logging only
 
     def complete(self, system: str, prompt: str) -> str:
         try:
-            out = self._cli.run(f"{system}\n\n{prompt}")
+            out = self._cli.run(f"{system}\n\n{prompt}", model=self.model)
         except Exception:                    # noqa: BLE001
-            _harvest("complete", self.model, system, prompt, "", ok=False)
+            _harvest("complete", self._label(), system, prompt, "", ok=False)
             return LLM_UNAVAILABLE
-        _harvest("complete", self.model, system, prompt, out, ok=True)
+        _harvest("complete", self._label(), system, prompt, out, ok=True)
         return out
 
     def extract(self, schema_model: Type[T], system: str, prompt: str) -> Optional[T]:
@@ -176,39 +176,37 @@ class ClaudeCLIProvider:
         instruction = (f"{system}\n\nReturn ONLY a JSON object matching this JSON schema "
                        f"(no prose, no markdown fence):\n{schema}\n\nInput:\n{prompt}")
         try:
-            out = _strip_fence(self._cli.run(instruction))
+            out = _strip_fence(self._cli.run(instruction, model=self.model))
         except Exception:                    # noqa: BLE001
-            _harvest("extract", self.model, system, prompt, "", ok=False)
+            _harvest("extract", self._label(), system, prompt, "", ok=False)
             return None
         parsed = _parse_into(schema_model, out)
-        _harvest("extract", self.model, system, prompt, out, ok=parsed is not None,
+        _harvest("extract", self._label(), system, prompt, out, ok=parsed is not None,
                  labels={"schema": schema_model.__name__})
         return parsed
 
 
-def get_provider(name: Optional[str] = None):
-    """Return a provider by name: 'ollama', 'claude', or None/'auto' (Ollama if up, else Null).
-
-    Every branch degrades to NullProvider rather than raising, so the pipeline always runs its
-    deterministic half. Existing callers use get_provider() (auto) unchanged.
+def get_provider(name: Optional[str] = None, model: Optional[str] = None):
+    """Return a provider by name ('ollama' | 'claude' | None/'auto'), at an optional specific model
+    (Ollama tag, or a Claude CLI model alias). Every branch degrades to NullProvider rather than
+    raising, so the pipeline always runs its deterministic half.
     """
     if name == "claude":
-        p = ClaudeCLIProvider()
+        p = ClaudeCLIProvider(model=model)
         return p if p.is_available() else NullProvider()
     # "ollama" / auto / None / anything else
-    return OllamaProvider() if ollama_available() else NullProvider()
+    return OllamaProvider(model=model or OLLAMA_MODEL) if ollama_available() else NullProvider()
 
 
-def provider_by_name(name: Optional[str]):
-    """Rebuild a provider from its recorded name WITHOUT re-checking availability.
+def provider_by_name(name: Optional[str], model: Optional[str] = None):
+    """Rebuild a provider from its recorded name + model WITHOUT re-checking availability.
 
-    Onboarding resolves the (possibly UI-selected) provider once per run via get_provider(...)
-    and records `llm_provider` in state; downstream nodes reconstruct from that name, so one
-    availability check governs the whole run and the reported provider can't silently flip
-    between nodes.
+    Onboarding resolves the (possibly UI-selected) provider+model once per run and records
+    `llm_provider`/`llm_model`; downstream nodes reconstruct from those, so one availability check
+    governs the whole run and neither the provider nor the model can silently flip between nodes.
     """
     if name == "ollama":
-        return OllamaProvider()
+        return OllamaProvider(model=model or OLLAMA_MODEL)
     if name == "claude":
-        return ClaudeCLIProvider()
+        return ClaudeCLIProvider(model=model)
     return NullProvider()

@@ -157,7 +157,9 @@ function applyEvent(event, data, ctx, replay) {
     addActivity(`${what} · model: ${m.provider}`, "meta");
     term(`[meta] ${what} model=${m.provider}`);
     const brain = $("brain");
-    if (brain) brain.textContent = m.mode === "agent" ? `🧠 agent · ${m.provider}` : "🧠 deterministic";
+    if (brain) brain.textContent = m.mode === "agent"
+      ? `🧠 agent · ${m.provider}${m.model ? " · " + m.model : ""}`
+      : "🧠 deterministic";
   } else if (event === "plan") {
     ctx.planSteps = JSON.parse(data).steps;
     if (!replay) setProgressTotal(ctx.planSteps.length);
@@ -193,12 +195,12 @@ function applyEvent(event, data, ctx, replay) {
   }
 }
 
-async function send(message, file, provider, signal, history) {
+async function send(message, file, provider, signal, history, model) {
   const resp = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, file: file || null, provider, history: history || [],
-                           session_id: sid }),
+    body: JSON.stringify({ message, file: file || null, provider, model: model || null,
+                           history: history || [], session_id: sid }),
     signal,
   });
   if (!resp.ok) { addMsg("Server error: " + resp.status, "assistant", "warn"); return; }
@@ -563,8 +565,24 @@ async function loadWorkdir() {
   try { setWorkdirLabel((await (await fetch("/api/workdir")).json()).workdir); } catch (e) { /* offline */ }
 }
 
-// on load: list sessions, repaint the current one, load settings + stats + workdir
-(async () => { await populateSessions(); await replaySession(sid); await loadSettings(); await refreshDatasetStats(); await loadWorkdir(); })();
+// ---- model picker: per-provider model list from /api/models ----
+let MODELS = { ollama: [], claude: [], defaults: {} };
+async function loadModels() {
+  try { MODELS = await (await fetch("/api/models")).json(); } catch (e) { /* offline */ }
+  populateModels();
+}
+function populateModels() {
+  const prov = $("provider").value;
+  const list = prov === "ollama" ? (MODELS.ollama || []) : prov === "claude" ? (MODELS.claude || []) : [];
+  const def = prov === "ollama" && MODELS.defaults ? MODELS.defaults.ollama : "";
+  const opts = [`<option value="">default${def ? " (" + esc(def) + ")" : ""}</option>`];
+  for (const m of list) opts.push(`<option value="${esc(m)}">${esc(m)}</option>`);
+  $("model").innerHTML = opts.join("");
+}
+$("provider").addEventListener("change", populateModels);
+
+// on load: list sessions, repaint the current one, load settings + stats + workdir + models
+(async () => { await populateSessions(); await replaySession(sid); await loadSettings(); await refreshDatasetStats(); await loadWorkdir(); await loadModels(); })();
 
 // ---- tabs (Output / Activity / Terminal) ----
 let currentTab = "output";
@@ -646,6 +664,7 @@ $("composer").addEventListener("submit", async (e) => {
   const msg = $("message").value.trim();
   if (!msg) return;
   const provider = $("provider").value;
+  const model = $("model").value;
   inputHistory.push(msg);
   inputHistIdx = -1;
   addMsg(msg, "user");
@@ -656,7 +675,7 @@ $("composer").addEventListener("submit", async (e) => {
   convo.push({ role: "user", content: msg });
   inFlight = true; setStopMode(true);
   abortCtrl = new AbortController();
-  try { await send(msg, null, provider, abortCtrl.signal, history); }
+  try { await send(msg, null, provider, abortCtrl.signal, history, model); }
   catch (err) {
     if (err.name === "AbortError") { addActivity("stopped by user", "err"); }
     else { addMsg("Error: " + err.message, "assistant", "warn"); addActivity("error: " + err.message, "err"); }

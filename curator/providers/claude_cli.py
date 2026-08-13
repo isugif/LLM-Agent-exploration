@@ -25,9 +25,9 @@ class ClaudeCLIProvider:
     def model(self) -> str:
         return os.environ.get("CURATOR_CLAUDE_MODEL", "CLI default")
 
-    def run(self, prompt: str, *, timeout: int = 180) -> str:
+    def run(self, prompt: str, *, timeout: int = 180, model: str | None = None) -> str:
         cmd = ["claude", "-p", prompt, "--output-format", "text"]
-        model = os.environ.get("CURATOR_CLAUDE_MODEL")
+        model = model or os.environ.get("CURATOR_CLAUDE_MODEL")   # explicit arg wins over env
         if model:
             cmd += ["--model", model]
         with tempfile.TemporaryDirectory() as tmpdir:

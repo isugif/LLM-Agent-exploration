@@ -26,7 +26,7 @@ class DeclaredFacts(BaseModel):
 
 def onboard(*, tool: str, fastq: str, question: str, deliverable: Optional[str] = None,
             reference: Optional[str] = None, annotation: Optional[str] = None,
-            provider_name: Optional[str] = None) -> dict:
+            provider_name: Optional[str] = None, provider_model: Optional[str] = None) -> dict:
     """Probe the input, extract declared facts, reconcile, and build the spec.
 
     `provider_name` selects the LLM provider once for the run ("ollama" | "claude" | "auto"/None);
@@ -36,7 +36,7 @@ def onboard(*, tool: str, fastq: str, question: str, deliverable: Optional[str] 
     measured = get_probe(tool)(fastq)
     measured["has_reference"] = bool(reference)     # aligner reference-required gate
     measured["has_annotation"] = bool(annotation)   # rustqc gtf-required gate
-    provider = get_provider(provider_name)
+    provider = get_provider(provider_name, provider_model)
 
     declared: dict = {}
     if not isinstance(provider, NullProvider):
@@ -62,4 +62,5 @@ def onboard(*, tool: str, fastq: str, question: str, deliverable: Optional[str] 
         "declared": declared,
         "spec": spec.to_dict(),
         "llm_provider": provider.name,
+        "llm_model": provider_model,          # the selected model (None = provider default), threaded on
     }

@@ -54,12 +54,13 @@ def _confirm_boundary(provider, tool_id: str, tool_summary: str,
     return res.violates, res.reason
 
 
-def judge(*, tool: str, spec: dict, llm_provider: Optional[str] = None) -> dict:
+def judge(*, tool: str, spec: dict, llm_provider: Optional[str] = None,
+          llm_model: Optional[str] = None) -> dict:
     """Route the spec against the tool's contract. Returns {"route": RouteDecision.to_dict()}."""
     contract = cl.load_contract(tool)
-    # one availability check per run: onboarding resolved the (possibly UI-selected) provider and
-    # recorded its name; rebuild it here without re-checking.
-    provider = provider_by_name(llm_provider)
+    # one availability check per run: onboarding resolved the (possibly UI-selected) provider+model
+    # and recorded them; rebuild here without re-checking.
+    provider = provider_by_name(llm_provider, llm_model)
 
     # 0) human-review gate: refuse an un-vetted contract (HRR_ markers) before anything else.
     gate = review_gate(contract)

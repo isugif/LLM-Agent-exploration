@@ -19,4 +19,5 @@ def onboarding_node(state: dict) -> dict:
         reference=state.get("reference"),
         annotation=state.get("annotation"),
         provider_name=state.get("provider"),
+        provider_model=state.get("provider_model"),
     )

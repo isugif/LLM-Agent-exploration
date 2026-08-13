@@ -189,7 +189,7 @@ def _t_run_tool(args, ctx):
         tool=tool, fastq=path, question=args.get("question") or ctx["message"],
         reference=workdir.resolve_path(args.get("reference")),
         annotation=workdir.resolve_path(args.get("annotation")),
-        out_dir=out_dir, provider=ctx["provider_name"])
+        out_dir=out_dir, provider=ctx["provider_name"], provider_model=ctx.get("provider_model"))
 
     action = result.get("route", {}).get("action")
     verdict = (result.get("verdict") or {}).get("status")
@@ -302,14 +302,16 @@ def _system_prompt() -> str:
 def run_agent(message: str, history: list[dict], provider, sid: str) -> Iterator[tuple[str, dict]]:
     """Drive the tool-use loop, yielding (sse_event_name, data) pairs. Terminal event is ('prose', …)
     followed by ('done', {}). SSE event names match the existing UI: log/meta/panel/plan/stage/prose."""
-    yield "meta", {"provider": getattr(provider, "name", "null"), "mode": "agent", "sid": sid}
+    yield "meta", {"provider": getattr(provider, "name", "null"),
+                   "model": getattr(provider, "model", None), "mode": "agent", "sid": sid}
     if isinstance(provider, NullProvider) or getattr(provider, "name", "null") == "null":
         yield "prose", {"text": _DEGRADED}
         yield "done", {}
         return
 
     system = _system_prompt()
-    ctx = {"sid": sid, "message": message, "provider_name": getattr(provider, "name", None), "done": {}}
+    ctx = {"sid": sid, "message": message, "provider_name": getattr(provider, "name", None),
+           "provider_model": getattr(provider, "model", None), "done": {}}
     transcript = _format_history(history)
     observations: list[str] = []
     seen: dict[str, int] = {}                     # action signature -> times proposed (loop guard)
@@ -319,8 +321,7 @@ def run_agent(message: str, history: list[dict], provider, sid: str) -> Iterator
         if observations:
             prompt += "\nObservations so far:\n" + "\n".join(observations) + "\n"
         prompt += "\nYour next action (JSON):"
-        action = (provider.extract(AgentAction, system=system, prompt=prompt)
-                  or provider.extract(AgentAction, system=system, prompt=prompt))   # one retry
+        action = provider.extract(AgentAction, system=system, prompt=prompt)
         if action is None:
             yield "prose", {"text": _finish_summary(ctx, "I couldn't form a valid next step.")}
             yield "done", {}

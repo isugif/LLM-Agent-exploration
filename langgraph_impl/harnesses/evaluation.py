@@ -15,4 +15,5 @@ def evaluation_node(state: dict) -> dict:
         run_result=state["run_result"],
         spec=state["spec"],
         llm_provider=state.get("llm_provider"),
+        llm_model=state.get("llm_model"),
     )
