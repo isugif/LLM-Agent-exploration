@@ -78,7 +78,6 @@ def run_tool(contract: dict, input_path: str, out_dir: str, *,
     """
     tool_id = contract["id"]
     ex = contract.get("execution", {})
-    argv_template = ex.get("argv")
     install_hint = ex.get("install_hint", f"install {tool_id}")
     inputs = {k: v for k, v in (inputs or {}).items() if v}   # drop None/empty extra inputs
 
@@ -90,39 +89,54 @@ def run_tool(contract: dict, input_path: str, out_dir: str, *,
         **{k: str(v) for k, v in inputs.items()},
     }
 
-    if not argv_template:
+    # A tool defines EITHER a single `argv` or an ordered list of `steps` (e.g. build an index, then
+    # align). Normalize to a list so the loop below handles both — a single-command tool is one step.
+    step_templates = ex.get("steps") or ([ex["argv"]] if ex.get("argv") else None)
+    if not step_templates:
         return RunResult(tool=tool_id, ok=False, exit_code=None, stdout="", stderr="",
                          output_dir=None, audit=audit,
-                         error=f"contract for '{tool_id}' has no execution.argv")
-
-    exe = shutil.which(argv_template[0])
-    if exe is None:
-        return RunResult(tool=tool_id, ok=False, exit_code=None, stdout="", stderr="",
-                         output_dir=None, audit=audit,
-                         error=f"{argv_template[0]} not found on PATH. Install: {install_hint}")
+                         error=f"contract for '{tool_id}' has no execution.argv or .steps")
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     subs = {"input": input_path, "out_dir": out_dir, "threads": threads, **inputs}
-    argv = _render(argv_template, subs)
-    unfilled = _unfilled_placeholder(argv)               # a required secondary input wasn't supplied
-    if unfilled:
-        label = _INPUT_LABEL.get(unfilled, f"the '{unfilled}' input")
-        return RunResult(tool=tool_id, ok=False, exit_code=None, stdout="", stderr="",
-                         output_dir=None, audit=audit,
-                         error=f"{tool_id} requires {label}; none was provided")
-    argv[0] = exe                       # use the resolved absolute path
-    audit["cmd"] = " ".join(argv)
-
+    cmds: list[str] = []
+    proc = None
     start = time.time()
-    try:
-        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        audit["seconds"] = round(time.time() - start, 2)
-        return RunResult(tool=tool_id, ok=False, exit_code=None, stdout=exc.stdout or "",
-                         stderr=(exc.stderr or "") + f"\n[timeout after {timeout}s]",
-                         output_dir=str(out_dir), audit=audit, error=f"{tool_id} timed out")
-    audit["seconds"] = round(time.time() - start, 2)
-    audit["exit_code"] = proc.returncode
 
-    return RunResult(tool=tool_id, ok=proc.returncode == 0, exit_code=proc.returncode,
+    for i, template in enumerate(step_templates):
+        exe = shutil.which(template[0])
+        if exe is None:
+            audit["seconds"] = round(time.time() - start, 2)
+            audit["cmds"] = cmds
+            return RunResult(tool=tool_id, ok=False, exit_code=None, stdout="", stderr="",
+                             output_dir=None, audit=audit,
+                             error=f"{template[0]} not found on PATH. Install: {install_hint}")
+        argv = _render(template, subs)
+        unfilled = _unfilled_placeholder(argv)           # a required secondary input wasn't supplied
+        if unfilled:
+            label = _INPUT_LABEL.get(unfilled, f"the '{unfilled}' input")
+            return RunResult(tool=tool_id, ok=False, exit_code=None, stdout="", stderr="",
+                             output_dir=None, audit=audit,
+                             error=f"{tool_id} requires {label}; none was provided")
+        argv[0] = exe                                    # resolved absolute path
+        cmds.append(" ".join(argv))
+        try:
+            proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            audit["seconds"] = round(time.time() - start, 2)
+            audit["cmd"], audit["cmds"] = cmds[-1], cmds
+            return RunResult(tool=tool_id, ok=False, exit_code=None, stdout=exc.stdout or "",
+                             stderr=(exc.stderr or "") + f"\n[timeout after {timeout}s]",
+                             output_dir=str(out_dir), audit=audit, error=f"{tool_id} timed out")
+        if proc.returncode != 0:                         # stop-on-failure: return this step's failure
+            audit["seconds"] = round(time.time() - start, 2)
+            audit["exit_code"], audit["cmd"], audit["cmds"] = proc.returncode, cmds[-1], cmds
+            if len(step_templates) > 1:
+                audit["failed_step"] = i + 1
+            return RunResult(tool=tool_id, ok=False, exit_code=proc.returncode, stdout=proc.stdout,
+                             stderr=proc.stderr, output_dir=str(out_dir), audit=audit)
+
+    audit["seconds"] = round(time.time() - start, 2)
+    audit["exit_code"], audit["cmd"], audit["cmds"] = proc.returncode, cmds[-1], cmds
+    return RunResult(tool=tool_id, ok=True, exit_code=proc.returncode,
                      stdout=proc.stdout, stderr=proc.stderr, output_dir=str(out_dir), audit=audit)

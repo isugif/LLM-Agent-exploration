@@ -1,0 +1,7 @@
+# CLEAN machine section (fact-only). Validates against schemas.py:MetaSection. Assembled into the contract.
+summary: >
+  Splice-aware read aligner. Builds a graph FM-index from a reference genome (FASTA) and aligns
+  sequencing reads against it, writing SAM alignments — well suited to RNA-seq reads that span
+  splice junctions. It aligns; it does not call variants, assemble, or quantify expression.
+expectations_ref: alignment_qc.yaml
+category_tags: [Read_Alignment_and_Mapping]

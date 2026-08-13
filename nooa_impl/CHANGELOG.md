@@ -6,6 +6,18 @@ so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.6.0] — 2026-08-13
+
+Shared-layer: multi-step tool execution + a runnable gate; hisat2 becomes the first multi-step tool.
+The NOOA judgment agent gained a `runnable_gate` wrapper for parity (14/0 unchanged).
+
+### Added
+- shared: `execution.steps` (ordered commands sharing `{out_dir}`, stop-on-failure); `ExecutionSection`
+  accepts `argv` OR `steps`. bio-tools: **hisat2** two-step (build index → align).
+- shared: `runnable_gate` — refuse a documented-but-not-runnable tool before compute; called in the
+  NOOA judgment path too.
+- docs: BACKLOG "workflow composition" (the future chaining/caching path).
+
 ## [0.5.0] — 2026-08-12
 
 App-layer change: the chat app becomes the front door and the agent loop is the default brain (no

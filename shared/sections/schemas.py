@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # --------------------------------------------------------------------------- #
@@ -159,10 +159,21 @@ class MetaSection(BaseModel):
 
 
 class ExecutionSection(BaseModel):
-    """How the generic runner invokes the tool. `argv` is a token list (no shell)."""
-    argv: list[str] = Field(description="token list with {input}/{out_dir}/{threads} placeholders")
+    """How the generic runner invokes the tool. Provide `argv` (a single command) OR `steps` (an
+    ordered sequence of commands run in one pass — e.g. build an index, then align — sharing
+    {out_dir}). No shell: token lists only."""
+    argv: Optional[list[str]] = Field(default=None,
+                                      description="token list with {input}/{out_dir}/{threads}/… placeholders")
+    steps: Optional[list[list[str]]] = Field(default=None,
+                                             description="ordered argv token-lists for a multi-step run (e.g. index build -> align)")
     version_argv: Optional[list[str]] = None
     install_hint: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _one_of_argv_or_steps(self):
+        if not self.argv and not self.steps:
+            raise ValueError("execution must define `argv` or `steps`")
+        return self
 
 
 class Precondition(BaseModel):

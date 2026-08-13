@@ -40,14 +40,24 @@ def test_run_pipeline_reuses_declared_facts():
     assert r["spec"]["declared"]["platform"] == "nanopore"
 
 
-def test_documented_but_not_runnable_refuses_before_compute():
-    """A tool documented for explain/find only (no machine execution section, e.g. hisat2) must refuse
-    at judgment with `not_runnable` — not fail later in the runner."""
-    r = pipeline.run_pipeline(tool="hisat2", fastq=GOOD, question="align these reads")
+def test_runnable_gate_refuses_a_documented_only_contract():
+    """A documented-for-explain/find-only tool (no machine execution section) refuses at judgment with
+    `not_runnable`; a contract with argv OR steps passes the gate."""
+    from shared.harness_steps import runnable_gate
+    assert runnable_gate({"id": "aligner", "execution": {"steps": [["hisat2"]]}}) is None   # steps -> ok
+    assert runnable_gate({"id": "aligner", "execution": {"argv": ["fastqc"]}}) is None       # argv  -> ok
+    r = runnable_gate({"id": "docsonly", "execution": {}})                                   # neither -> refuse
+    assert r.action == "refuse" and any("not_runnable" in f for f in r.precondition_failures)
+
+
+def test_hisat2_multistep_is_now_runnable():
+    """hisat2 (a two-step build+align contract) is no longer 'not runnable' — it refuses only on the
+    missing reference precondition, proving the multi-step execution wired it into the harness."""
+    r = pipeline.run_pipeline(tool="hisat2", fastq=GOOD, reference=None, question="align these reads")
     assert r["route"]["action"] == "refuse"
-    assert any("not_runnable" in f for f in r["route"]["precondition_failures"])
-    assert r["run_result"] is None and r["verdict"] is None
-    assert "execution" not in r["trace"]
+    fails = r["route"]["precondition_failures"]
+    assert any("reference_provided" in f for f in fails)
+    assert not any("not_runnable" in f for f in fails)   # it IS runnable now, just needs a reference
 
 
 def test_refuse_short_circuits_before_compute():

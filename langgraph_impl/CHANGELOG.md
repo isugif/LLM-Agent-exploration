@@ -6,6 +6,21 @@ changelog so the two histories stay comparable.
 
 Format: [Keep a Changelog](https://keepachangelog.com/). This project is pre-1.0.
 
+## [0.6.0] — 2026-08-13
+
+Multi-step tool execution + a runnable gate. hisat2 becomes the first multi-step tool.
+
+### Added
+- shared: `execution.steps` — a contract may define an ordered sequence of commands (not just a single
+  `argv`); the runner runs them in order sharing `{out_dir}`, stops on the first failure (reports
+  `failed_step`). `ExecutionSection` now accepts `argv` OR `steps`.
+- bio-tools: **hisat2** wired as the first multi-step tool — `hisat2-build` (index) → `hisat2` (align),
+  with preconditions (reference required), boundaries, failure modes, and the SAM parser reused.
+- shared: `runnable_gate` — judgment refuses a documented-but-not-runnable tool (no `execution`
+  argv/steps) BEFORE compute, instead of a cryptic runner error later (both tracks; parity 14/0).
+- docs: BACKLOG "workflow composition" — the future path (hisat2_build as a separate reusable/cacheable
+  contract + a chaining engine); the multi-step runner is its stepping stone.
+
 ## [0.5.0] — 2026-08-12
 
 The chat app becomes the front door and the agent loop becomes the default brain. LangGraph/NOOA are
