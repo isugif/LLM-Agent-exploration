@@ -128,6 +128,42 @@ def test_list_outputs_surfaces_run_output(monkeypatch):
     assert run0["tool"] == "fastqc" and run0["out_dir"]
 
 
+def test_run_tool_pattern_runs_matching_files_in_one_call(tmp_path, monkeypatch):
+    """'run fastqc on the snf files' -> a single run_tool(pattern='snf') runs EVERY snf FASTQ and
+    nothing else. Deterministic file selection; the model never enumerates."""
+    import shutil, gzip
+    if shutil.which("fastqc") is None:
+        import pytest
+        pytest.skip("fastqc not installed")
+    from app import workdir
+    for nm in ("snf2_1.fastq.gz", "snf2_2.fastq.gz", "wt_1.fastq.gz"):
+        with gzip.open(tmp_path / nm, "wt") as fh:
+            fh.write("@r\nACGTACGTAC\n+\nIIIIIIIIII\n")
+    monkeypatch.setattr(workdir, "_workdir", tmp_path)
+    events, sid = _drive([
+        AgentAction(tool="run_tool", args={"tool": "fastqc", "pattern": "snf"}),
+        AgentAction(answer="done"),
+    ])
+    files = sorted(Path(r["file"]).name for r in STORE.load_runs(sid))
+    assert files == ["snf2_1.fastq.gz", "snf2_2.fastq.gz"]     # only snf, not wt — one call, two runs
+    judged = [d for (n, d) in events if n == "stage" and d.get("stage") == "judgment"]
+    assert len(judged) == 2
+
+
+def test_run_tool_aggregator_defaults_to_runs_dir():
+    """'run multiqc' with no path -> deterministically defaults to the session runs/ dir (not a guessed
+    folder); the empty session then refuses on reports_present."""
+    events, sid = _drive([
+        AgentAction(tool="run_tool", args={"tool": "multiqc"}),
+        AgentAction(answer="no reports yet"),
+    ])
+    logs = [d.get("text", "") for (n, d) in events if n == "log"]
+    assert any("aggregating reports in" in t for t in logs)    # defaulted a dir, didn't ask for a file
+    judged = [d for (n, d) in events if n == "stage" and d.get("stage") == "judgment"]
+    assert judged and judged[0]["action"] == "refuse"
+    assert any("reports_present" in f for f in judged[0].get("precondition_failures", []))
+
+
 def test_degrades_without_llm():
     from shared.llm.provider import NullProvider
     sid = STORE.ensure(None)
